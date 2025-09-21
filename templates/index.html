@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}메인{% endblock %}
+
+{% block content %}
+<div class="text-center py-5">
+  <h1 class="mb-4">최신 게시글</h1>
+  <a href="{{ url_for('posts') }}" class="btn btn-secondary mb-4">전체 게시글 보기</a>
+</div>
+
+<div class="row">
+  {% for post in posts %}
+  <div class="col-md-4 mb-4">
+    <div class="card h-100 shadow-sm">
+      {% if post.image %}
+      <img src="{{ post.image }}" class="card-img-top" alt="post image">
+      {% endif %}
+      <div class="card-body">
+        <h5 class="card-title">{{ post.title }}</h5>
+        <p class="card-text">{{ post.excerpt }}</p>
+        <a href="{{ url_for('post_detail', post_id=post.id) }}" class="btn btn-primary">자세히 보기</a>
+      </div>
+    </div>
+  </div>
+  {% else %}
+  <div class="col-12">
+    <p class="text-center text-muted">아직 게시글이 없습니다.</p>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

@@ -1,0 +1,8 @@
+Flask
+gunicorn
+Flask-SQLAlchemy
+Flask-SocketIO
+requests
+pytz
+werkzeug
+eventlet

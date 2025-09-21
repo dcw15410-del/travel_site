@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}{{ room }} 채팅{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h2>{{ room }} 채팅방</h2>
+  <div>현지시간: <span id="room-time">--:--:--</span></div>
+</div>
+
+<div class="card mb-3">
+  <div class="card-body" id="messages" style="height:400px; overflow-y:auto;">
+    {% for m in messages %}
+      <div class="mb-2"><strong>{{ m.nickname }}:</strong> {{ m.text }} <small class="text-secondary">[{{ m.created_at.strftime("%H:%M:%S") }}]</small></div>
+    {% endfor %}
+  </div>
+</div>
+
+<div class="input-group mb-3">
+  <input id="msg-input" type="text" class="form-control" placeholder="메시지를 입력하세요">
+  <button id="send-btn" class="btn btn-primary">전송</button>
+</div>
+
+<a href="{{ url_for('chat_rooms') }}" class="btn btn-secondary">목록으로</a>
+{% endblock %}
+
+{% block extra_script %}
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+<script>
+const socket = io();
+const room = "{{ room }}";
+const user = "{{ user.nickname }}";
+const messagesDiv = document.getElementById('messages');
+const roomTimeSpan = document.getElementById('room-time');
+const msgInput = document.getElementById('msg-input');
+const sendBtn = document.getElementById('send-btn');
+
+const TIMEZONE_MAP = {
+"한국":"Asia/Seoul",
+"일본":"Asia/Tokyo",
+"베트남":"Asia/Ho_Chi_Minh",
+"필리핀":"Asia/Manila",
+"태국":"Asia/Bangkok"
+};
+
+// 입장
+socket.emit('join', {room: room, user: user});
+
+// 수신
+socket.on('receive_message', data => {
+    const div = document.createElement('div');
+    div.classList.add('mb-2');
+    if(data.user === '시스템') {
+        div.innerHTML = `<em class="text-muted">${data.msg} <small>[${data.time}]</small></em>`;
+    } else {
+        div.innerHTML = `<strong>${data.user}:</strong> ${data.msg} <small class="text-secondary">[${data.time}]</small>`;
+    }
+    messagesDiv.appendChild(div);
+    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+});
+
+// 전송 (버튼)
+function sendMessage(){
+    const msg = msgInput.value.trim();
+    if(!msg) return;
+    socket.emit('send_message', {room: room, user: user, msg: msg});
+    msgInput.value = '';
+}
+sendBtn.addEventListener('click', sendMessage);
+
+// 엔터로 전송
+msgInput.addEventListener('keydown', (e) => {
+    if(e.key === 'Enter') sendMessage();
+});
+
+// 퇴장
+window.addEventListener('beforeunload', ()=>{
+    socket.emit('leave', {room: room, user: user});
+});
+
+// 현지시간 업데이트
+setInterval(()=>{
+    const tz = TIMEZONE_MAP[room];
+    const now = new Intl.DateTimeFormat('ko-KR', {hour12:false,hour:'2-digit',minute:'2-digit',second:'2-digit', timeZone: tz}).format(new Date());
+    roomTimeSpan.textContent = now;
+}, 1000);
+</script>
+{% endblock %}

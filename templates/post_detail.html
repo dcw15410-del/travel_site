@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}{{ post.title }}{% endblock %}
+
+{% block content %}
+<div class="card mb-3 shadow-sm">
+  {% if post.image %}
+  <img src="{{ post.image }}" class="card-img-top" alt="post image">
+  {% endif %}
+  <div class="card-body">
+    <h3 class="card-title">{{ post.title }}</h3>
+    <p class="card-text">{{ post.content }}</p>
+    <small class="text-muted">작성일: {{ post.created_at.strftime('%Y-%m-%d %H:%M') }}</small>
+  </div>
+</div>
+<a href="{{ url_for('posts') }}" class="btn btn-secondary">목록으로</a>
+{% endblock %}
