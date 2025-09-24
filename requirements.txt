@@ -1,8 +1,7 @@
-Flask
-gunicorn
-Flask-SQLAlchemy
-Flask-SocketIO
+flask
+flask-sqlalchemy
+flask-socketio
+eventlet
 requests
 pytz
-werkzeug
-eventlet
+gunicorn
