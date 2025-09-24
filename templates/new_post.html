@@ -1,7 +1,28 @@
-<h1>새 게시글 작성</h1>
-<form action="{{ url_for('new_post') }}" method="POST" enctype="multipart/form-data">
-  <input type="text" name="title" placeholder="제목" required><br><br>
-  <textarea name="content" placeholder="내용" required></textarea><br><br>
-  <input type="file" name="image"><br><br>
-  <button type="submit">등록</button>
-</form>
+{% extends "base.html" %}
+{% block content %}
+<div class="container mt-4">
+  <h2 class="mb-4">새 게시글 작성</h2>
+  <div class="card shadow-sm">
+    <div class="card-body">
+      <form action="{{ url_for('new_post') }}" method="POST" enctype="multipart/form-data">
+        <div class="mb-3">
+          <label for="title" class="form-label">제목</label>
+          <input type="text" class="form-control" id="title" name="title" required>
+        </div>
+        <div class="mb-3">
+          <label for="content" class="form-label">내용</label>
+          <textarea class="form-control" id="content" name="content" rows="6" required></textarea>
+        </div>
+        <div class="mb-3">
+          <label for="image" class="form-label">이미지 첨부</label>
+          <input type="file" class="form-control" id="image" name="image">
+        </div>
+        <div class="d-flex justify-content-between">
+          <button type="submit" class="btn btn-success">등록</button>
+          <a href="{{ url_for('posts') }}" class="btn btn-secondary">취소</a>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
