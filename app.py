@@ -1,11 +1,11 @@
 import eventlet
-# Must monkey-patch before importing libraries that use sockets/threads.
 eventlet.monkey_patch()
 
 from flask import Flask, render_template, request, redirect, session, flash, url_for, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_socketio import SocketIO, emit, join_room, leave_room
 from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.utils import secure_filename
 from datetime import datetime
 import os, pytz, requests, logging
 
@@ -15,18 +15,18 @@ import os, pytz, requests, logging
 logging.basicConfig(level=logging.INFO)
 
 app = Flask(__name__)
-# For production you should set SECRET_KEY as an environment variable
 app.secret_key = os.environ.get("SECRET_KEY", "change_this_secret_for_production")
 
 basedir = os.path.abspath(os.path.dirname(__file__))
 app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{os.path.join(basedir, 'travel_site.db')}"
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# -----------------------------
-# 확장 초기화
-# -----------------------------
+# 업로드 폴더
+UPLOAD_FOLDER = os.path.join(basedir, 'static', 'uploads')
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+
 db = SQLAlchemy(app)
-# use eventlet async mode explicitly
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
 
 # -----------------------------
@@ -121,17 +121,41 @@ def new_post():
     if request.method == 'POST':
         title = request.form.get('title','').strip()
         content = request.form.get('content','').strip()
-        image = request.form.get('image','').strip() or None
+        file = request.files.get('image')
+
         if not title or not content:
             flash("제목과 내용을 입력하세요.")
             return redirect(url_for('new_post'))
+
+        filename = None
+        if file and file.filename:
+            filename = secure_filename(file.filename)
+            file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+
         excerpt = (content[:280] + '...') if len(content) > 280 else content
-        post = Post(title=title, content=content, excerpt=excerpt, image=image, user_id=session['user_id'])
+        post = Post(title=title, content=content, excerpt=excerpt,
+                    image=filename, user_id=session['user_id'])
         db.session.add(post)
         db.session.commit()
         flash("새 글이 등록되었습니다.")
         return redirect(url_for('posts'))
     return render_template("new_post.html")
+
+@app.route('/post/<int:post_id>/delete', methods=['POST'])
+def delete_post(post_id):
+    if "user_id" not in session:
+        flash("로그인 후 삭제 가능합니다.")
+        return redirect(url_for('login'))
+
+    post = Post.query.get_or_404(post_id)
+    if post.user_id != session["user_id"]:
+        flash("본인 글만 삭제할 수 있습니다.")
+        return redirect(url_for('post_detail', post_id=post.id))
+
+    db.session.delete(post)
+    db.session.commit()
+    flash("게시글이 삭제되었습니다.")
+    return redirect(url_for('posts'))
 
 # -----------------------------
 # 회원가입 / 로그인 / 로그아웃
@@ -227,7 +251,7 @@ def map_view():
     return render_template("map.html")
 
 # -----------------------------
-# 환율 계산 API (보강됨)
+# 환율 계산 API
 # -----------------------------
 @app.route('/convert_currency')
 def convert_currency_api():
@@ -251,7 +275,6 @@ def convert_currency_api():
         return jsonify({"error": "지원하지 않는 통화입니다."}), 400
 
     try:
-        # 1차 시도: exchangerate.host
         url = f"https://api.exchangerate.host/convert?from={from_cur}&to={to_cur}&amount={amount}"
         resp = requests.get(url, timeout=10)
         data = resp.json()
@@ -261,7 +284,6 @@ def convert_currency_api():
             rate = data.get("info", {}).get("rate", 0)
             return jsonify({"result": result, "rate": rate})
 
-        # 2차 시도: open.er-api.com
         backup_url = f"https://open.er-api.com/v6/latest/{from_cur}"
         r2 = requests.get(backup_url, timeout=10)
         data2 = r2.json()
@@ -270,7 +292,7 @@ def convert_currency_api():
             rate = data2["rates"][to_cur]
             return jsonify({"result": round(amount * rate, 2), "rate": rate})
 
-        return jsonify({"error": "환율 계산 실패 (API 응답 없음)"}), 500
+        return jsonify({"error": "환율 계산 실패"}), 500
 
     except Exception as e:
         return jsonify({"error": f"서버 오류: {str(e)}"}), 500
@@ -323,15 +345,14 @@ def handle_send_message(data):
     emit('receive_message', {'user': nickname, 'msg': text, 'time': ts.strftime("%H:%M:%S")}, room=room)
 
 # -----------------------------
-# DB 생성 (import 시 보장)
+# DB 생성
 # -----------------------------
 with app.app_context():
     db.create_all()
 
 # -----------------------------
-# 실행 (로컬 개발용)
+# 실행
 # -----------------------------
 if __name__ == '__main__':
-    # 로컬에서 디버그 모드로 실행하려면 아래 환경변수 FLASK_DEBUG=1 설정
     debug_mode = os.environ.get('FLASK_DEBUG', '0') == '1'
     socketio.run(app, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=debug_mode)

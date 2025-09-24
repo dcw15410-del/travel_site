@@ -1,16 +1,14 @@
-{% extends "base.html" %}
-{% block title %}{{ post.title }}{% endblock %}
+<h1>{{ post.title }}</h1>
+<p>{{ post.content }}</p>
 
-{% block content %}
-<div class="card mb-3 shadow-sm">
-  {% if post.image %}
-  <img src="{{ post.image }}" class="card-img-top" alt="post image">
-  {% endif %}
-  <div class="card-body">
-    <h3 class="card-title">{{ post.title }}</h3>
-    <p class="card-text">{{ post.content }}</p>
-    <small class="text-muted">작성일: {{ post.created_at.strftime('%Y-%m-%d %H:%M') }}</small>
-  </div>
-</div>
-<a href="{{ url_for('posts') }}" class="btn btn-secondary">목록으로</a>
-{% endblock %}
+{% if post.image %}
+  <img src="{{ url_for('static', filename='uploads/' ~ post.image) }}"
+       alt="게시글 이미지" style="max-width:300px;">
+{% endif %}
+
+<br><br>
+{% if current_user and current_user.id == post.user_id %}
+<form action="{{ url_for('delete_post', post_id=post.id) }}" method="POST">
+  <button type="submit">삭제하기</button>
+</form>
+{% endif %}
