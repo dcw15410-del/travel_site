@@ -1,25 +1,33 @@
+import eventlet
+# Must monkey-patch before importing libraries that use sockets/threads.
+eventlet.monkey_patch()
+
 from flask import Flask, render_template, request, redirect, session, flash, url_for, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_socketio import SocketIO, emit, join_room, leave_room
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
-import os, pytz, requests
+import os, pytz, requests, logging
 
 # -----------------------------
-# Flask 초기화
+# 기본 설정
 # -----------------------------
+logging.basicConfig(level=logging.INFO)
+
 app = Flask(__name__)
-app.secret_key = "change_this_secret_for_production"
+# For production you should set SECRET_KEY as an environment variable
+app.secret_key = os.environ.get("SECRET_KEY", "change_this_secret_for_production")
 
-# -----------------------------
-# SQLite 설정
-# -----------------------------
 basedir = os.path.abspath(os.path.dirname(__file__))
 app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{os.path.join(basedir, 'travel_site.db')}"
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
+# -----------------------------
+# 확장 초기화
+# -----------------------------
 db = SQLAlchemy(app)
-socketio = SocketIO(app, cors_allowed_origins="*")
+# use eventlet async mode explicitly
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
 
 # -----------------------------
 # DB 모델
@@ -225,36 +233,47 @@ def map_view():
 def convert_currency_api():
     from_cur = request.args.get("from")
     to_cur = request.args.get("to")
-    amount = request.args.get("amount", type=float, default=1.0)
+    try:
+        amount = float(request.args.get('amount', '1') or '1')
+    except Exception:
+        amount = 1.0
+
+    currencies = {
+        "USD":"미국 달러","KRW":"대한민국 원","JPY":"일본 엔",
+        "EUR":"유로","CNY":"중국 위안","THB":"태국 바트",
+        "VND":"베트남 동","PHP":"필리핀 페소"
+    }
+
+    if not from_cur or not to_cur:
+        return jsonify({"error": "통화 파라미터가 필요합니다."}), 400
+
+    if from_cur not in currencies or to_cur not in currencies:
+        return jsonify({"error": "지원하지 않는 통화입니다."}), 400
 
     try:
         # 1차 시도: exchangerate.host
         url = f"https://api.exchangerate.host/convert?from={from_cur}&to={to_cur}&amount={amount}"
-        r = requests.get(url, timeout=10)
-        data = r.json()
+        resp = requests.get(url, timeout=10)
+        data = resp.json()
 
-        if "result" in data and data["result"] is not None:
-            return jsonify({
-                "result": round(data["result"], 2),
-                "rate": round(data["info"]["rate"], 4)
-            })
+        if data.get("result") is not None:
+            result = round(data.get("result", 0), 2)
+            rate = data.get("info", {}).get("rate", 0)
+            return jsonify({"result": result, "rate": rate})
 
         # 2차 시도: open.er-api.com
         backup_url = f"https://open.er-api.com/v6/latest/{from_cur}"
         r2 = requests.get(backup_url, timeout=10)
         data2 = r2.json()
 
-        if data2.get("result") == "success" and to_cur in data2["rates"]:
+        if data2.get("result") == "success" and to_cur in data2.get("rates", {}):
             rate = data2["rates"][to_cur]
-            return jsonify({
-                "result": round(amount * rate, 2),
-                "rate": round(rate, 4)
-            })
+            return jsonify({"result": round(amount * rate, 2), "rate": rate})
 
-        return jsonify({"error": "환율 계산 실패 (API 응답 없음)"})
+        return jsonify({"error": "환율 계산 실패 (API 응답 없음)"}), 500
 
     except Exception as e:
-        return jsonify({"error": f"서버 오류: {str(e)}"})
+        return jsonify({"error": f"서버 오류: {str(e)}"}), 500
 
 # -----------------------------
 # 환율 계산 페이지
@@ -304,15 +323,15 @@ def handle_send_message(data):
     emit('receive_message', {'user': nickname, 'msg': text, 'time': ts.strftime("%H:%M:%S")}, room=room)
 
 # -----------------------------
-# 실행
+# DB 생성 (import 시 보장)
 # -----------------------------
-from flask import Flask
-from flask_socketio import SocketIO
+with app.app_context():
+    db.create_all()
 
-app = Flask(__name__)
-socketio = SocketIO(app)
-
-if __name__ == "__main__":
-    socketio.run(app)
-
-
+# -----------------------------
+# 실행 (로컬 개발용)
+# -----------------------------
+if __name__ == '__main__':
+    # 로컬에서 디버그 모드로 실행하려면 아래 환경변수 FLASK_DEBUG=1 설정
+    debug_mode = os.environ.get('FLASK_DEBUG', '0') == '1'
+    socketio.run(app, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=debug_mode)

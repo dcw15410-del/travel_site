@@ -2,6 +2,7 @@ flask
 flask-sqlalchemy
 flask-socketio
 eventlet
+gunicorn
 requests
 pytz
-gunicorn
+werkzeug
