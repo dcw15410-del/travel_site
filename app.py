@@ -239,9 +239,9 @@ def chat(room):
     if room not in CHAT_ROOMS:
         flash("존재하지 않는 채팅방입니다.")
         return redirect(url_for('chat_rooms'))
-    messages = Message.query.filter_by(room=room).order_by(Message.created_at.asc()).all()
     user = User.query.get(session['user_id'])
-    return render_template('chat.html', messages=messages, user=user, room=room)
+    # DB 메시지는 불러오지 않음 → 빈 리스트 전달
+    return render_template('chat.html', messages=[], user=user, room=room)
 
 # -----------------------------
 # 지도 라우트
@@ -284,7 +284,7 @@ def convert_currency_api():
             rate = data.get("info", {}).get("rate", 0)
             return jsonify({"result": result, "rate": rate})
 
-        backup_url = f"https://open.er-api.com/v6/latest/{from_cur}"
+        backup_url = f"https://open.er-api.com/v6/latest/{from_cur}"`
         r2 = requests.get(backup_url, timeout=10)
         data2 = r2.json()
 
