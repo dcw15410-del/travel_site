@@ -5,7 +5,7 @@
 <div class="card shadow-sm mb-4">
   <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
     <span>{{ room }} 채팅방</span>
-    <a href="{{ url_for('chat_rooms') }}" class="btn btn-sm btn-light">← 목록으로</a>
+    <a href="{{ url_for('chat_rooms') }}" id="leave-btn" class="btn btn-sm btn-light">← 목록으로</a>
   </div>
   <div class="card-body" style="height: 500px; overflow-y: auto;" id="chat-box">
     <!-- 메시지 출력 영역 -->
@@ -31,10 +31,10 @@
   const room = "{{ room }}";
   const user = "{{ user.nickname }}";
 
-  // 입장 이벤트 전송
+  // ✅ 채팅방 입장
   socket.emit("join", { room: room, user: user });
 
-  // 메시지 수신
+  // ✅ 메시지 수신
   socket.on("receive_message", (data) => {
     const box = document.getElementById("chat-box");
     const div = document.createElement("div");
@@ -44,14 +44,14 @@
     box.scrollTop = box.scrollHeight;
   });
 
-  // 인원수 업데이트
+  // ✅ 인원수 업데이트
   socket.on("room_users_update", (data) => {
     if (data[room] !== undefined) {
       document.getElementById("room-user-count").innerText = data[room];
     }
   });
 
-  // 메시지 전송
+  // ✅ 메시지 전송
   document.getElementById("chat-form").addEventListener("submit", (e) => {
     e.preventDefault();
     const input = document.getElementById("chat-input");
@@ -61,12 +61,17 @@
     input.value = "";
   });
 
-  // 퇴장 이벤트 (새로고침/이동 시)
+  // ✅ 채팅방 퇴장 (목록 버튼 클릭 시)
+  document.getElementById("leave-btn").addEventListener("click", (e) => {
+    socket.emit("leave", { room: room, user: user });
+  });
+
+  // ✅ 채팅방 퇴장 (창 닫기 / 새로고침 시)
   window.addEventListener("beforeunload", () => {
     socket.emit("leave", { room: room, user: user });
   });
 
-  // 현지시각 실시간 업데이트
+  // ✅ 현지시각 실시간 업데이트
   function updateTime() {
     const el = document.getElementById("room-time");
     const tz = el.dataset.tz;

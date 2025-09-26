@@ -323,7 +323,10 @@ def on_join(data):
     room = data.get('room','한국')
     nickname = data.get('user','익명')
     join_room(room)
-    room_users[room] += 1
+
+    # 인원 증가
+    room_users[room] = max(0, room_users.get(room, 0)) + 1
+
     ts = datetime.now().strftime("%H:%M:%S")
     emit('receive_message', {'user':'시스템','msg':f'{nickname}님이 입장했습니다.','time':ts}, room=room)
     socketio.emit('room_users_update', room_users, broadcast=True)
@@ -333,7 +336,11 @@ def on_leave(data):
     room = data.get('room','한국')
     nickname = data.get('user','익명')
     leave_room(room)
-    room_users[room] = max(0, room_users[room]-1)
+
+    # ✅ 안전하게 감소 처리
+    if room in room_users and room_users[room] > 0:
+        room_users[room] -= 1
+
     ts = datetime.now().strftime("%H:%M:%S")
     emit('receive_message', {'user':'시스템','msg':f'{nickname}님이 퇴장했습니다.', 'time':ts}, room=room)
     socketio.emit('room_users_update', room_users, broadcast=True)

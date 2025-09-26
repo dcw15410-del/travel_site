@@ -2,25 +2,20 @@
 {% block title %}채팅방 목록 - TravelSite{% endblock %}
 
 {% block content %}
-<div class="card shadow-sm mb-4">
+<div class="card shadow-sm">
   <div class="card-header bg-primary text-white">
-    <h5 class="mb-0">채팅방 목록</h5>
+    채팅방 목록
   </div>
   <div class="card-body">
-    <div class="row row-cols-1 row-cols-md-2 g-3">
-      {% for room in chat_rooms %}
-      <div class="col">
-        <div class="card h-100 border-0 shadow-sm">
-          <div class="card-body">
-            <h5 class="card-title">{{ room }}</h5>
-            <p class="card-text">
-              인원: <span id="user-count-{{ room }}">{{ room_users[room] }}</span>명 <br>
-              현지시각: <span class="local-time" data-tz="{{ timezone_map[room] }}" id="time-{{ room }}">{{ room_times[room] }}</span>
-            </p>
-            <a href="{{ url_for('chat', room=room) }}" class="btn btn-sm btn-primary">입장하기</a>
+    <div class="list-group">
+      {% for r in chat_rooms %}
+        <a href="{{ url_for('chat', room=r) }}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+          <div>
+            <strong>{{ r }}</strong><br>
+            <small>현지시각: <span class="local-time" data-room="{{ r }}" data-tz="{{ timezone_map[r] }}">{{ room_times[r] }}</span></small>
           </div>
-        </div>
-      </div>
+          <span class="badge bg-primary rounded-pill" id="user-count-{{ r }}">{{ room_users[r] }}</span>
+        </a>
       {% endfor %}
     </div>
   </div>
@@ -30,10 +25,9 @@
 {% block extra_script %}
 <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
 <script>
-  // Socket 연결
   const socket = io();
 
-  // 인원수 업데이트
+  // ✅ 인원수 실시간 업데이트
   socket.on("room_users_update", (data) => {
     for (const [room, count] of Object.entries(data)) {
       const el = document.getElementById(`user-count-${room}`);
@@ -41,12 +35,11 @@
     }
   });
 
-  // 현지시각 실시간 업데이트
+  // ✅ 현지시각 실시간 업데이트
   function updateTimes() {
     document.querySelectorAll(".local-time").forEach(el => {
       const tz = el.dataset.tz;
-      const now = new Date().toLocaleTimeString("ko-KR", { timeZone: tz, hour12: false });
-      el.innerText = now;
+      el.innerText = new Date().toLocaleTimeString("ko-KR", { timeZone: tz, hour12: false });
     });
   }
   setInterval(updateTimes, 1000);
