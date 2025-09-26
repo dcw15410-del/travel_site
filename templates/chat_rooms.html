@@ -1,20 +1,44 @@
 {% extends "base.html" %}
 {% block title %}채팅방 목록{% endblock %}
+
 {% block content %}
-<h2>채팅방</h2>
-<div class="list-group">
+<h2>채팅방 목록</h2>
+<div class="row">
   {% for room in chat_rooms %}
-  <a href="{{ url_for('chat', room=room) }}" class="list-group-item list-group-item-action">
-    {{ room }} ({{ room_users[room] }}) - {{ room_times[room] }}
-  </a>
+  <div class="col-md-4">
+    <div class="card mb-3">
+      <div class="card-body">
+        <h5 class="card-title">{{ room }}</h5>
+        <p class="card-text">
+          현재 인원: <span id="count-{{ room }}">{{ room_users[room] }}</span>명<br>
+          현지 시각: <span id="time-{{ room }}">{{ room_times[room] }}</span>
+        </p>
+        <a href="{{ url_for('chat', room=room) }}" class="btn btn-primary">입장하기</a>
+      </div>
+    </div>
+  </div>
   {% endfor %}
 </div>
-<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+{% endblock %}
+
+{% block scripts %}
 <script>
-const socket = io();
-socket.on("room_users_update", data => {
-  console.log("인원 업데이트", data);
-  location.reload();
-});
+  const socket = io();
+
+  // 인원수 실시간 업데이트
+  socket.on("room_users_update", function(data){
+    for (const [room, count] of Object.entries(data)) {
+      $("#count-" + room).text(count);
+    }
+  });
+
+  // 시각 업데이트 (클라이언트 기준)
+  function updateTimes() {
+    {% for room in chat_rooms %}
+      let now = new Date().toLocaleTimeString("ko-KR", {hour12:false});
+      $("#time-{{ room }}").text(now);
+    {% endfor %}
+  }
+  setInterval(updateTimes, 1000);
 </script>
 {% endblock %}

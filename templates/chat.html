@@ -1,33 +1,51 @@
 {% extends "base.html" %}
 {% block title %}{{ room }} 채팅방{% endblock %}
+
 {% block content %}
 <h2>{{ room }} 채팅방</h2>
-<div id="chat-box" class="border p-3 mb-3" style="height:300px; overflow-y:scroll;"></div>
-<form id="chat-form" class="d-flex">
-  <input id="msg" class="form-control me-2" placeholder="메시지 입력">
-  <button class="btn btn-primary">전송</button>
-</form>
-<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+<div class="chat-box" id="chat-box"></div>
+<div class="chat-input">
+  <form id="chat-form">
+    <div class="input-group">
+      <input type="text" id="message" class="form-control" placeholder="메시지를 입력하세요">
+      <button class="btn btn-primary" type="submit">전송</button>
+    </div>
+  </form>
+</div>
+<div class="mt-3">
+  <a href="{{ url_for('chat_rooms') }}" class="btn btn-secondary">채팅방 목록으로</a>
+</div>
+{% endblock %}
+
+{% block scripts %}
 <script>
-const socket = io();
-const room = "{{ room }}";
-const user = "{{ user.nickname }}";
+  const socket = io();
+  const room = "{{ room }}";
+  const nickname = "{{ user.nickname }}";
 
-socket.emit("join", {room, user});
+  // 방 입장
+  socket.emit("join", {room: room, user: nickname});
 
-socket.on("receive_message", data => {
-  const box = document.getElementById("chat-box");
-  box.innerHTML += `<div><b>${data.user}</b>: ${data.msg} <small>${data.time}</small></div>`;
-  box.scrollTop = box.scrollHeight;
-});
+  // 메시지 수신
+  socket.on("receive_message", function(data){
+    const box = $("#chat-box");
+    const msg = `<div class="chat-message"><span class="user">${data.user}</span>: ${data.msg} <span class="time">[${data.time}]</span></div>`;
+    box.append(msg);
+    box.scrollTop(box[0].scrollHeight);
+  });
 
-document.getElementById("chat-form").onsubmit = e => {
-  e.preventDefault();
-  const msg = document.getElementById("msg").value;
-  if(msg.trim()){
-    socket.emit("send_message", {room, user, msg});
-    document.getElementById("msg").value = "";
-  }
-}
+  // 메시지 전송
+  $("#chat-form").submit(function(e){
+    e.preventDefault();
+    const msg = $("#message").val().trim();
+    if (!msg) return;
+    socket.emit("send_message", {room: room, user: nickname, msg: msg});
+    $("#message").val("");
+  });
+
+  // 방 나가기
+  window.addEventListener("beforeunload", function(){
+    socket.emit("leave", {room: room, user: nickname});
+  });
 </script>
 {% endblock %}

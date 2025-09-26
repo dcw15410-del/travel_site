@@ -1,39 +1,113 @@
 {% extends "base.html" %}
-{% block title %}환율 계산기{% endblock %}
+
 {% block content %}
-<h2>환율 계산기</h2>
-<form id="currency-form" class="row g-3">
-  <div class="col-md-3"><input type="number" id="amount" class="form-control" value="1"></div>
-  <div class="col-md-3">
-    <select id="from" class="form-select">
-      <option value="USD">USD</option><option value="KRW">KRW</option><option value="JPY">JPY</option>
-      <option value="EUR">EUR</option><option value="CNY">CNY</option><option value="THB">THB</option>
-      <option value="VND">VND</option><option value="PHP">PHP</option>
-    </select>
-  </div>
-  <div class="col-md-3">
-    <select id="to" class="form-select">
-      <option value="KRW">KRW</option><option value="USD">USD</option><option value="JPY">JPY</option>
-      <option value="EUR">EUR</option><option value="CNY">CNY</option><option value="THB">THB</option>
-      <option value="VND">VND</option><option value="PHP">PHP</option>
-    </select>
-  </div>
-  <div class="col-md-3"><button class="btn btn-primary w-100">계산</button></div>
-</form>
-<div id="result" class="mt-3"></div>
+<div class="container mt-4">
+    <div class="card shadow-sm">
+        <div class="card-body">
+            <h2 class="card-title mb-4">환율 계산기</h2>
+
+            <!-- 검색 가능한 통화 선택 -->
+            <div class="mb-3">
+                <input type="text" class="form-control" id="currency_search" placeholder="통화 검색 (예: 미국, 엔, KRW)">
+            </div>
+
+            <!-- 금액 입력 & 통화 선택 -->
+            <div class="row g-2 mb-3">
+                <div class="col-md-4">
+                    <input type="number" id="amount" class="form-control" placeholder="금액" value="1" min="0">
+                </div>
+                <div class="col-md-4">
+                    <select id="from_currency" class="form-select">
+                        {% for code, name in currencies.items() %}
+                        <option value="{{ code }}">{{ name }} ({{ code }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <select id="to_currency" class="form-select">
+                        {% for code, name in currencies.items() %}
+                        <option value="{{ code }}">{{ name }} ({{ code }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <!-- 변환 결과 표시 영역 -->
+            <div id="result_area" class="alert alert-info" style="display:none;"></div>
+        </div>
+    </div>
+</div>
+
+<!-- JS: 검색 + 실시간 환율 계산 -->
 <script>
-document.getElementById("currency-form").onsubmit = async e=>{
-  e.preventDefault();
-  const amount=document.getElementById("amount").value;
-  const from=document.getElementById("from").value;
-  const to=document.getElementById("to").value;
-  const res=await fetch(`/convert_currency?from=${from}&to=${to}&amount=${amount}`);
-  const data=await res.json();
-  if(data.error){
-    document.getElementById("result").innerHTML=`<div class="alert alert-danger">${data.error}</div>`;
-  }else{
-    document.getElementById("result").innerHTML=`<div class="alert alert-success">${amount} ${from} → ${data.result} ${to} (환율: ${data.rate})</div>`;
-  }
+const currencies = {};
+{% for code, name in currencies.items() %}
+currencies["{{ code }}"] = "{{ name }}";
+{% endfor %}
+
+const fromSelect = document.getElementById("from_currency");
+const toSelect = document.getElementById("to_currency");
+const searchInput = document.getElementById("currency_search");
+const amountInput = document.getElementById("amount");
+const resultArea = document.getElementById("result_area");
+
+// 통화 검색 필터
+searchInput.addEventListener("input", function() {
+    const term = searchInput.value.toLowerCase();
+    [fromSelect, toSelect].forEach(select => {
+        select.innerHTML = "";
+        for (let code in currencies) {
+            const name = currencies[code];
+            if(name.toLowerCase().includes(term) || code.toLowerCase().includes(term)) {
+                const opt = document.createElement("option");
+                opt.value = code;
+                opt.text = `${name} (${code})`;
+                select.appendChild(opt);
+            }
+        }
+    });
+    calculate(); // 검색 시 자동 계산
+});
+
+// 실시간 환율 변환
+function calculate() {
+    const amount = parseFloat(amountInput.value) || 1;
+    const from = fromSelect.value;
+    const to = toSelect.value;
+
+    if(!from || !to) return;
+
+    fetch(`/convert_currency?from=${from}&to=${to}&amount=${amount}`)
+    .then(res => res.json())
+    .then(data => {
+        if(data.error){
+            resultArea.style.display = "block";
+            resultArea.className = "alert alert-danger";
+            resultArea.innerHTML = `변환 실패: ${data.error}`;
+        } else {
+            resultArea.style.display = "block";
+            resultArea.className = "alert alert-success";
+            resultArea.innerHTML = `
+                <p class="mb-1"><strong>${currencies[from]} (${from})</strong> ${amount} →
+                <strong>${currencies[to]} (${to})</strong> ${data.result}</p>
+                <small>환율: 1 ${from} = ${data.rate} ${to}</small>
+            `;
+        }
+    })
+    .catch(err => {
+        resultArea.style.display = "block";
+        resultArea.className = "alert alert-danger";
+        resultArea.innerHTML = "API 호출 오류";
+        console.error(err);
+    });
 }
+
+// 이벤트: 입력/선택 변경 시 실시간 계산
+amountInput.addEventListener("input", calculate);
+fromSelect.addEventListener("change", calculate);
+toSelect.addEventListener("change", calculate);
+
+// 페이지 로딩 시 초기 계산
+window.addEventListener("load", calculate);
 </script>
 {% endblock %}
