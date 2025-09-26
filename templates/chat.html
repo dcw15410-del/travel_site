@@ -2,50 +2,95 @@
 {% block title %}{{ room }} 채팅방{% endblock %}
 
 {% block content %}
-<h2>{{ room }} 채팅방</h2>
-<div class="chat-box" id="chat-box"></div>
-<div class="chat-input">
-  <form id="chat-form">
-    <div class="input-group">
-      <input type="text" id="message" class="form-control" placeholder="메시지를 입력하세요">
-      <button class="btn btn-primary" type="submit">전송</button>
-    </div>
-  </form>
+<h2 class="mb-2">{{ room }} 채팅방</h2>
+
+<div class="alert alert-info">
+  현재 인원: <strong><span id="room-user-count">{{ room_users[room] }}</span></strong>명
+  <span class="ms-3">현지 시각: <strong><span id="room-time">{{ room_times[room] }}</span></strong></span>
 </div>
-<div class="mt-3">
-  <a href="{{ url_for('chat_rooms') }}" class="btn btn-secondary">채팅방 목록으로</a>
+
+<div class="chat-box mb-3" id="chat-box">
+  <!-- 메시지(입장시 DB 메시지는 불러오지 않음) -->
+  {% for m in messages %}
+    <div class="chat-message"><span class="user">{{ m.nickname }}</span>: {{ m.text }} <span class="time">[{{ m.created_at.strftime('%H:%M:%S') }}]</span></div>
+  {% endfor %}
+</div>
+
+<form id="chat-form" class="mb-3">
+  <div class="input-group">
+    <input type="text" id="message" class="form-control" placeholder="메시지를 입력하세요">
+    <button class="btn btn-primary" type="submit">전송</button>
+  </div>
+</form>
+
+<div>
+  <a href="{{ url_for('chat_rooms') }}" id="back-to-list" class="btn btn-secondary">← 채팅방 목록으로</a>
 </div>
 {% endblock %}
 
-{% block scripts %}
+{% block extra_script %}
 <script>
   const socket = io();
-  const room = "{{ room }}";
-  const nickname = "{{ user.nickname }}";
+  const ROOM = "{{ room }}";
+  const NICKNAME = "{{ user.nickname }}";
 
-  // 방 입장
-  socket.emit("join", {room: room, user: nickname});
+  // emit join on connect (ensures reconnections re-join safely)
+  socket.on('connect', function() {
+    socket.emit('join', {room: ROOM, user: NICKNAME});
+  });
 
-  // 메시지 수신
-  socket.on("receive_message", function(data){
-    const box = $("#chat-box");
-    const msg = `<div class="chat-message"><span class="user">${data.user}</span>: ${data.msg} <span class="time">[${data.time}]</span></div>`;
-    box.append(msg);
+  // receive message
+  socket.on('receive_message', function(data){
+    const box = $('#chat-box');
+    const html = `<div class="chat-message"><span class="user">${data.user}</span>: ${data.msg} <span class="time">[${data.time}]</span></div>`;
+    box.append(html);
     box.scrollTop(box[0].scrollHeight);
   });
 
-  // 메시지 전송
-  $("#chat-form").submit(function(e){
-    e.preventDefault();
-    const msg = $("#message").val().trim();
-    if (!msg) return;
-    socket.emit("send_message", {room: room, user: nickname, msg: msg});
-    $("#message").val("");
+  // room user count updates
+  socket.on('room_users_update', function(data){
+    if (data && data[ROOM] !== undefined){
+      $('#room-user-count').text(data[ROOM]);
+    }
   });
 
-  // 방 나가기
-  window.addEventListener("beforeunload", function(){
-    socket.emit("leave", {room: room, user: nickname});
+  // send message
+  $('#chat-form').on('submit', function(e){
+    e.preventDefault();
+    const msg = $('#message').val().trim();
+    if (!msg) return;
+    socket.emit('send_message', {room: ROOM, user: NICKNAME, msg: msg});
+    $('#message').val('');
   });
+
+  // on back-to-list click: emit leave then navigate (small delay to let leave be sent)
+  $('#back-to-list').on('click', function(e){
+    e.preventDefault();
+    const href = $(this).attr('href');
+    socket.emit('leave', {room: ROOM, user: NICKNAME});
+    // small delay to let server process leave
+    setTimeout(function(){ window.location.href = href; }, 120);
+  });
+
+  // on page unload (close/refresh), emit leave (best-effort)
+  window.addEventListener('beforeunload', function(e){
+    try {
+      socket.emit('leave', {room: ROOM, user: NICKNAME});
+    } catch(err){}
+  });
+
+  // update room local time every second using timezone_map passed from server
+  const TZ_MAP = {{ timezone_map|tojson }};
+  function updateRoomTime(){
+    try {
+      const tz = TZ_MAP[ROOM] || Intl.DateTimeFormat().resolvedOptions().timeZone;
+      const now = new Date().toLocaleTimeString('ko-KR', { hour12:false, timeZone: tz });
+      $('#room-time').text(now);
+    } catch(e){
+      // ignore
+    }
+  }
+  setInterval(updateRoomTime, 1000);
+  updateRoomTime();
 </script>
 {% endblock %}

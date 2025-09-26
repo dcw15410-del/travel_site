@@ -2,7 +2,7 @@
 {% block title %}채팅방 목록{% endblock %}
 
 {% block content %}
-<h2>채팅방 목록</h2>
+<h2 class="mb-3">채팅방 목록</h2>
 <div class="row">
   {% for room in chat_rooms %}
   <div class="col-md-4">
@@ -10,10 +10,10 @@
       <div class="card-body">
         <h5 class="card-title">{{ room }}</h5>
         <p class="card-text">
-          현재 인원: <span id="count-{{ room }}">{{ room_users[room] }}</span>명<br>
-          현지 시각: <span id="time-{{ room }}">{{ room_times[room] }}</span>
+          현재 인원: <strong><span id="count-{{ loop.index0 }}">{{ room_users[room] }}</span></strong>명<br>
+          현지 시각: <span id="time-{{ loop.index0 }}">{{ room_times[room] }}</span>
         </p>
-        <a href="{{ url_for('chat', room=room) }}" class="btn btn-primary">입장하기</a>
+        <a href="{{ url_for('chat', room=room) }}" class="btn btn-primary enter-room" data-room="{{ room }}">입장하기</a>
       </div>
     </div>
   </div>
@@ -21,24 +21,77 @@
 </div>
 {% endblock %}
 
-{% block scripts %}
+{% block extra_script %}
 <script>
   const socket = io();
 
-  // 인원수 실시간 업데이트
-  socket.on("room_users_update", function(data){
-    for (const [room, count] of Object.entries(data)) {
-      $("#count-" + room).text(count);
+  // Update counts when server broadcasts
+  socket.on("room_users_update", function(data) {
+    // data: { room_name: count, ... }
+    // find matching card by room name (we used loop.index0 ids)
+    // safer: build a mapping from room name -> element by data attribute
+    $('[data-room]').each(function() {
+      const roomName = $(this).data('room');
+      const idx = $(this).closest('.card').find('span[id^="count-"]').attr('id')?.split('-')[1];
+      // but easier: find card by text title
+    });
+
+    // simple approach: iterate chat_rooms from template side using window variable
+  });
+
+  // Build client-side room list from template variables
+  const CHAT_ROOMS = {{ chat_rooms|tojson }};
+  const ROOM_USERS = {{ room_users|tojson }};
+  const TIMEZONE_MAP = {{ timezone_map|tojson }};
+
+  // initialize counts into known elements by index
+  $(function(){
+    for (let i=0;i<CHAT_ROOMS.length;i++){
+      $('#count-'+i).text(ROOM_USERS[CHAT_ROOMS[i]] || 0);
+      // set initial time display using timeZone
+      try {
+        const tz = TIMEZONE_MAP[CHAT_ROOMS[i]] || Intl.DateTimeFormat().resolvedOptions().timeZone;
+        const now = new Date().toLocaleTimeString('ko-KR', { hour12:false, timeZone: tz });
+        $('#time-'+i).text(now);
+      } catch(e){
+        // fallback: use server-provided value (already in HTML)
+      }
     }
   });
 
-  // 시각 업데이트 (클라이언트 기준)
-  function updateTimes() {
-    {% for room in chat_rooms %}
-      let now = new Date().toLocaleTimeString("ko-KR", {hour12:false});
-      $("#time-{{ room }}").text(now);
-    {% endfor %}
+  // on server updates, update counts by room name
+  socket.on("room_users_update", function(data){
+    for (let i=0;i<CHAT_ROOMS.length;i++){
+      const r = CHAT_ROOMS[i];
+      const c = data[r] === undefined ? 0 : data[r];
+      $('#count-'+i).text(c);
+    }
+  });
+
+  // update times every second using timezone mapping
+  function tickTimes(){
+    for (let i=0;i<CHAT_ROOMS.length;i++){
+      try {
+        const tz = TIMEZONE_MAP[CHAT_ROOMS[i]] || Intl.DateTimeFormat().resolvedOptions().timeZone;
+        const now = new Date().toLocaleTimeString('ko-KR', { hour12:false, timeZone: tz });
+        $('#time-'+i).text(now);
+      } catch(e) {
+        // ignore
+      }
+    }
   }
-  setInterval(updateTimes, 1000);
+  setInterval(tickTimes, 1000);
+  tickTimes();
+
+  // ensure when user clicks "입장하기" the leave event for previous room is emitted before navigation
+  // (only applies if user had previous open socket state on same page)
+  $('.enter-room').on('click', function(e){
+    // no need to prevent navigation here — page will unload and 'beforeunload' on previous page will handle leave.
+    // we still emit a leave for safety.
+    const room = $(this).data('room');
+    // emit leave for other rooms (server will handle absence gracefully)
+    socket.emit('leave', {room: room});
+    // no blocking; navigation proceeds
+  });
 </script>
 {% endblock %}

@@ -3,7 +3,7 @@ eventlet.monkey_patch()
 
 from flask import Flask, render_template, request, redirect, session, flash, url_for, jsonify
 from flask_sqlalchemy import SQLAlchemy
-from flask_socketio import SocketIO, emit, join_room, leave_room, disconnect
+from flask_socketio import SocketIO, emit, join_room, leave_room
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from datetime import datetime
@@ -21,6 +21,7 @@ basedir = os.path.abspath(os.path.dirname(__file__))
 app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{os.path.join(basedir, 'travel_site.db')}"
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
+# 업로드 폴더
 UPLOAD_FOLDER = os.path.join(basedir, 'static', 'uploads')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
@@ -71,19 +72,26 @@ TIMEZONE_MAP = {
     "필리핀": "Asia/Manila",
     "태국": "Asia/Bangkok"
 }
-room_users = {room: 0 for room in CHAT_ROOMS}  # 인원 관리
-user_rooms = {}  # 각 연결별 사용자가 들어간 방 추적 {sid: room}
+
+# in-memory user tracking:
+# room_users: { room_name: count }
+# user_rooms: { sid: room_name }
+room_users = {room: 0 for room in CHAT_ROOMS}
+user_rooms = {}  # socket sid -> room
 
 # -----------------------------
-# 공통 템플릿 변수
+# 공통 템플릿 변수 (전역)
 # -----------------------------
 @app.context_processor
 def inject_user_and_subscription_and_times():
     user, subscribed = None, False
     if "user_id" in session:
-        user = User.query.get(session["user_id"])
-        if user:
-            subscribed = Subscriber.query.filter_by(email=user.email).first() is not None
+        try:
+            user = User.query.get(session["user_id"])
+            if user:
+                subscribed = Subscriber.query.filter_by(email=user.email).first() is not None
+        except Exception:
+            user = None
 
     room_times = {}
     for room in CHAT_ROOMS:
@@ -158,6 +166,15 @@ def delete_post(post_id):
     if post.user_id != session["user_id"]:
         flash("본인 글만 삭제할 수 있습니다.")
         return redirect(url_for('post_detail', post_id=post.id))
+
+    # 파일 삭제(선택적) - 실제 파일이 있으면 삭제
+    if post.image:
+        try:
+            path = os.path.join(app.config['UPLOAD_FOLDER'], post.image)
+            if os.path.exists(path):
+                os.remove(path)
+        except Exception:
+            pass
 
     db.session.delete(post)
     db.session.commit()
@@ -247,6 +264,7 @@ def chat(room):
         flash("존재하지 않는 채팅방입니다.")
         return redirect(url_for('chat_rooms'))
     user = User.query.get(session['user_id'])
+    # Do not load DB messages on entry (per your preference) -> pass empty list
     return render_template('chat.html', messages=[], user=user, room=room)
 
 # -----------------------------
@@ -286,17 +304,18 @@ def convert_currency_api():
         data = resp.json()
 
         if data.get("result") is not None:
-            result = round(data.get("result", 4), 4)
-            rate = round(data.get("info", {}).get("rate", 0), 6)
+            # return precise rate and result (client can format)
+            result = round(data.get("result", 0), 4)
+            rate = data.get("info", {}).get("rate", 0)
             return jsonify({"result": result, "rate": rate})
 
+        # backup
         backup_url = f"https://open.er-api.com/v6/latest/{from_cur}"
         r2 = requests.get(backup_url, timeout=10)
         data2 = r2.json()
-
         if data2.get("result") == "success" and to_cur in data2.get("rates", {}):
             rate = data2["rates"][to_cur]
-            return jsonify({"result": round(amount * rate, 4), "rate": round(rate, 6)})
+            return jsonify({"result": round(amount * rate, 4), "rate": rate})
 
         return jsonify({"error": "환율 계산 실패"}), 500
 
@@ -304,67 +323,91 @@ def convert_currency_api():
         return jsonify({"error": f"서버 오류: {str(e)}"}), 500
 
 # -----------------------------
-# 환율 계산 페이지
-# -----------------------------
-@app.route('/currency')
-def currency_page():
-    currencies = {
-        "USD":"미국 달러","KRW":"대한민국 원","JPY":"일본 엔",
-        "EUR":"유로","CNY":"중국 위안","THB":"태국 바트",
-        "VND":"베트남 동","PHP":"필리핀 페소"
-    }
-    return render_template("currency.html", currencies=currencies)
-
-# -----------------------------
-# SocketIO 이벤트
+# SocketIO 이벤트 (안전한 인원수 관리)
 # -----------------------------
 @socketio.on('join')
 def on_join(data):
-    room = data.get('room','한국')
-    nickname = data.get('user','익명')
-    join_room(room)
+    """
+    data: { room: <room>, user: <nickname> }
+    안전하게 이전 방에서 빠져나오고 새 방에 입장하도록 구현.
+    """
+    room = data.get('room', '한국')
+    nickname = data.get('user', '익명')
+    sid = request.sid
 
-    # 인원 증가
+    prev_room = user_rooms.get(sid)
+    # 이미 같은 방에 있으면 아무것도 하지 않음
+    if prev_room == room:
+        # still emit current counts (in case client needs it)
+        socketio.emit('room_users_update', room_users, broadcast=True)
+        return
+
+    # 만약 이전에 다른 방에 있었다면 그 방에서 빼기
+    if prev_room:
+        try:
+            leave_room(prev_room)
+        except Exception:
+            pass
+        if prev_room in room_users and room_users[prev_room] > 0:
+            room_users[prev_room] -= 1
+        user_rooms.pop(sid, None)
+
+    # 새 방에 입장
+    try:
+        join_room(room)
+    except Exception:
+        pass
+    user_rooms[sid] = room
     room_users[room] = max(0, room_users.get(room, 0)) + 1
-    user_rooms[request.sid] = room  # 연결 추적
 
     ts = datetime.now().strftime("%H:%M:%S")
-    emit('receive_message', {'user':'시스템','msg':f'{nickname}님이 입장했습니다.','time':ts}, room=room)
-
-    # 입장 즉시 인원수 전달
+    emit('receive_message', {'user': '시스템', 'msg': f'{nickname}님이 입장했습니다.', 'time': ts}, room=room)
     socketio.emit('room_users_update', room_users, broadcast=True)
 
 @socketio.on('leave')
 def on_leave(data):
-    room = data.get('room','한국')
-    nickname = data.get('user','익명')
-    leave_room(room)
+    """
+    data: { room: <room>, user: <nickname> }  (room optional)
+    안전하게 연결의 sid 를 이용해 해당 연결을 추적해서 감소시킵니다.
+    """
+    room = data.get('room')
+    nickname = data.get('user', '익명')
+    sid = request.sid
 
-    if room in room_users and room_users[room] > 0:
-        room_users[room] -= 1
-
-    user_rooms.pop(request.sid, None)
-
-    ts = datetime.now().strftime("%H:%M:%S")
-    emit('receive_message', {'user':'시스템','msg':f'{nickname}님이 퇴장했습니다.', 'time':ts}, room=room)
-    socketio.emit('room_users_update', room_users, broadcast=True)
+    prev_room = user_rooms.pop(sid, None)
+    target_room = prev_room or room
+    if target_room:
+        try:
+            leave_room(target_room)
+        except Exception:
+            pass
+        if target_room in room_users and room_users[target_room] > 0:
+            room_users[target_room] -= 1
+        ts = datetime.now().strftime("%H:%M:%S")
+        emit('receive_message', {'user': '시스템', 'msg': f'{nickname}님이 퇴장했습니다.', 'time': ts}, room=target_room)
+        socketio.emit('room_users_update', room_users, broadcast=True)
 
 @socketio.on('disconnect')
 def on_disconnect():
-    """브라우저 닫기 / 새로고침 등 비정상 종료 시 인원수 반영"""
-    room = user_rooms.pop(request.sid, None)
-    if room and room in room_users and room_users[room] > 0:
-        room_users[room] -= 1
+    """
+    비정상 종료(탭 닫기, 네트워크 끊김 등) 처리:
+    sid로 추적된 방이 있으면 감소 처리
+    """
+    sid = request.sid
+    prev_room = user_rooms.pop(sid, None)
+    if prev_room and prev_room in room_users and room_users[prev_room] > 0:
+        room_users[prev_room] -= 1
         socketio.emit('room_users_update', room_users, broadcast=True)
 
 @socketio.on('send_message')
 def handle_send_message(data):
-    room = data.get('room','한국')
-    text = data.get('msg','').strip()
+    room = data.get('room', '한국')
+    text = data.get('msg', '').strip()
     nickname = data.get('user') or (session.get('user_id') and User.query.get(session['user_id']).nickname) or "익명"
     if not text:
         return
     ts = datetime.utcnow()
+    # DB에 저장 (원하면 나중에 disable)
     try:
         m = Message(room=room, nickname=nickname, text=text, created_at=ts)
         db.session.add(m)
