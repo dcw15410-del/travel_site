@@ -98,7 +98,8 @@ def inject_user_and_subscription_and_times():
         is_subscribed=subscribed,
         chat_rooms=CHAT_ROOMS,
         room_times=room_times,
-        room_users=room_users
+        room_users=room_users,
+        timezone_map=TIMEZONE_MAP
     )
 
 # -----------------------------
@@ -244,7 +245,7 @@ def chat(room):
         return redirect(url_for('login'))
     if room not in CHAT_ROOMS:
         flash("존재하지 않는 채팅방입니다.")
-        return redirect(url_for('chat_rooms_view'))
+        return redirect(url_for('chat_rooms'))
     user = User.query.get(session['user_id'])
     return render_template('chat.html', messages=[], user=user, room=room)
 
