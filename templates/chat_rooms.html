@@ -1,38 +1,28 @@
 {% extends "base.html" %}
-{% block title %}채팅방 목록{% endblock %}
-
+{% block title %}채팅방 목록 - TravelSite{% endblock %}
 {% block content %}
-<h2 class="text-center mb-4">채팅방 목록</h2>
-<div class="list-group">
-  {% for room in chat_rooms %}
-  <a href="{{ url_for('chat', room=room) }}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-    {{ room }}
-    <span class="badge bg-secondary rounded-pill" data-tz="{{ room }}">{{ room_times[room] }}</span>
-  </a>
-  {% endfor %}
+<div class="container mt-4">
+    <h2>채팅방 목록</h2>
+    <ul class="list-group">
+        {% for room in chat_rooms %}
+        <li class="list-group-item d-flex justify-content-between align-items-center">
+            <a href="{{ url_for('chat', room=room) }}">{{ room }}</a>
+            <span class="badge bg-primary rounded-pill" id="count-{{ room }}">0</span>
+        </li>
+        {% endfor %}
+    </ul>
 </div>
-{% endblock %}
 
 {% block extra_script %}
+<script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
 <script>
-const TIMEZONE_MAP = {
-"한국":"Asia/Seoul",
-"일본":"Asia/Tokyo",
-"베트남":"Asia/Ho_Chi_Minh",
-"필리핀":"Asia/Manila",
-"태국":"Asia/Bangkok"
-};
-function updateTime(){
-    document.querySelectorAll('.badge').forEach(span=>{
-        const room = span.getAttribute('data-tz');
-        const tz = TIMEZONE_MAP[room];
-        const now = new Intl.DateTimeFormat('ko-KR',{
-            hour12:false, hour:'2-digit', minute:'2-digit', second:'2-digit', timeZone:tz
-        }).format(new Date());
-        span.textContent = now;
-    });
-}
-setInterval(updateTime,1000);
-updateTime();
+const socket = io();
+
+// 인원 수 업데이트 받기
+socket.on("update_user_count", data => {
+    const el = document.getElementById("count-" + data.room);
+    if(el) el.textContent = data.count;
+});
 </script>
+{% endblock %}
 {% endblock %}
