@@ -1,83 +1,51 @@
 {% extends "base.html" %}
-{% block title %}{{ room }} 채팅방 - TravelSite{% endblock %}
+{% block title %}{{ room }} 채팅방{% endblock %}
 
 {% block content %}
-<div class="card shadow-sm mb-4">
-  <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-    <span>{{ room }} 채팅방</span>
-    <a href="{{ url_for('chat_rooms') }}" id="leave-btn" class="btn btn-sm btn-light">← 목록으로</a>
-  </div>
-  <div class="card-body" style="height: 500px; overflow-y: auto;" id="chat-box">
-    <!-- 메시지 출력 영역 -->
-  </div>
-  <div class="card-footer">
-    <form id="chat-form" class="d-flex gap-2">
-      <input type="text" id="chat-input" class="form-control" placeholder="메시지를 입력하세요">
-      <button class="btn btn-primary">전송</button>
-    </form>
-  </div>
+<h2>{{ room }} 채팅방</h2>
+<div class="chat-box" id="chat-box"></div>
+<div class="chat-input">
+  <form id="chat-form">
+    <div class="input-group">
+      <input type="text" id="message" class="form-control" placeholder="메시지를 입력하세요">
+      <button class="btn btn-primary" type="submit">전송</button>
+    </div>
+  </form>
 </div>
-
-<div class="alert alert-info">
-  현재 인원: <span id="room-user-count">{{ room_users[room] }}</span>명 <br>
-  현지시각: <span class="local-time" data-tz="{{ timezone_map[room] }}" id="room-time">{{ room_times[room] }}</span>
+<div class="mt-3">
+  <a href="{{ url_for('chat_rooms') }}" class="btn btn-secondary">채팅방 목록으로</a>
 </div>
 {% endblock %}
 
-{% block extra_script %}
-<script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+{% block scripts %}
 <script>
   const socket = io();
   const room = "{{ room }}";
-  const user = "{{ user.nickname }}";
+  const nickname = "{{ user.nickname }}";
 
-  // ✅ 채팅방 입장
-  socket.emit("join", { room: room, user: user });
+  // 방 입장
+  socket.emit("join", {room: room, user: nickname});
 
-  // ✅ 메시지 수신
-  socket.on("receive_message", (data) => {
-    const box = document.getElementById("chat-box");
-    const div = document.createElement("div");
-    div.classList.add("mb-2");
-    div.innerHTML = `<strong>${data.user}</strong> [${data.time}] : ${data.msg}`;
-    box.appendChild(div);
-    box.scrollTop = box.scrollHeight;
+  // 메시지 수신
+  socket.on("receive_message", function(data){
+    const box = $("#chat-box");
+    const msg = `<div class="chat-message"><span class="user">${data.user}</span>: ${data.msg} <span class="time">[${data.time}]</span></div>`;
+    box.append(msg);
+    box.scrollTop(box[0].scrollHeight);
   });
 
-  // ✅ 인원수 업데이트
-  socket.on("room_users_update", (data) => {
-    if (data[room] !== undefined) {
-      document.getElementById("room-user-count").innerText = data[room];
-    }
-  });
-
-  // ✅ 메시지 전송
-  document.getElementById("chat-form").addEventListener("submit", (e) => {
+  // 메시지 전송
+  $("#chat-form").submit(function(e){
     e.preventDefault();
-    const input = document.getElementById("chat-input");
-    const msg = input.value.trim();
+    const msg = $("#message").val().trim();
     if (!msg) return;
-    socket.emit("send_message", { room: room, user: user, msg: msg });
-    input.value = "";
+    socket.emit("send_message", {room: room, user: nickname, msg: msg});
+    $("#message").val("");
   });
 
-  // ✅ 채팅방 퇴장 (목록 버튼 클릭 시)
-  document.getElementById("leave-btn").addEventListener("click", (e) => {
-    socket.emit("leave", { room: room, user: user });
+  // 방 나가기
+  window.addEventListener("beforeunload", function(){
+    socket.emit("leave", {room: room, user: nickname});
   });
-
-  // ✅ 채팅방 퇴장 (창 닫기 / 새로고침 시)
-  window.addEventListener("beforeunload", () => {
-    socket.emit("leave", { room: room, user: user });
-  });
-
-  // ✅ 현지시각 실시간 업데이트
-  function updateTime() {
-    const el = document.getElementById("room-time");
-    const tz = el.dataset.tz;
-    el.innerText = new Date().toLocaleTimeString("ko-KR", { timeZone: tz, hour12: false });
-  }
-  setInterval(updateTime, 1000);
-  updateTime();
 </script>
 {% endblock %}

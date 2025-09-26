@@ -1,48 +1,44 @@
 {% extends "base.html" %}
-{% block title %}채팅방 목록 - TravelSite{% endblock %}
+{% block title %}채팅방 목록{% endblock %}
 
 {% block content %}
-<div class="card shadow-sm">
-  <div class="card-header bg-primary text-white">
-    채팅방 목록
-  </div>
-  <div class="card-body">
-    <div class="list-group">
-      {% for r in chat_rooms %}
-        <a href="{{ url_for('chat', room=r) }}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-          <div>
-            <strong>{{ r }}</strong><br>
-            <small>현지시각: <span class="local-time" data-room="{{ r }}" data-tz="{{ timezone_map[r] }}">{{ room_times[r] }}</span></small>
-          </div>
-          <span class="badge bg-primary rounded-pill" id="user-count-{{ r }}">{{ room_users[r] }}</span>
-        </a>
-      {% endfor %}
+<h2>채팅방 목록</h2>
+<div class="row">
+  {% for room in chat_rooms %}
+  <div class="col-md-4">
+    <div class="card mb-3">
+      <div class="card-body">
+        <h5 class="card-title">{{ room }}</h5>
+        <p class="card-text">
+          현재 인원: <span id="count-{{ room }}">{{ room_users[room] }}</span>명<br>
+          현지 시각: <span id="time-{{ room }}">{{ room_times[room] }}</span>
+        </p>
+        <a href="{{ url_for('chat', room=room) }}" class="btn btn-primary">입장하기</a>
+      </div>
     </div>
   </div>
+  {% endfor %}
 </div>
 {% endblock %}
 
-{% block extra_script %}
-<script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+{% block scripts %}
 <script>
   const socket = io();
 
-  // ✅ 인원수 실시간 업데이트
-  socket.on("room_users_update", (data) => {
+  // 인원수 실시간 업데이트
+  socket.on("room_users_update", function(data){
     for (const [room, count] of Object.entries(data)) {
-      const el = document.getElementById(`user-count-${room}`);
-      if (el) el.innerText = count;
+      $("#count-" + room).text(count);
     }
   });
 
-  // ✅ 현지시각 실시간 업데이트
+  // 시각 업데이트 (클라이언트 기준)
   function updateTimes() {
-    document.querySelectorAll(".local-time").forEach(el => {
-      const tz = el.dataset.tz;
-      el.innerText = new Date().toLocaleTimeString("ko-KR", { timeZone: tz, hour12: false });
-    });
+    {% for room in chat_rooms %}
+      let now = new Date().toLocaleTimeString("ko-KR", {hour12:false});
+      $("#time-{{ room }}").text(now);
+    {% endfor %}
   }
   setInterval(updateTimes, 1000);
-  updateTimes();
 </script>
 {% endblock %}

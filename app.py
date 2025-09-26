@@ -3,7 +3,7 @@ eventlet.monkey_patch()
 
 from flask import Flask, render_template, request, redirect, session, flash, url_for, jsonify
 from flask_sqlalchemy import SQLAlchemy
-from flask_socketio import SocketIO, emit, join_room, leave_room
+from flask_socketio import SocketIO, emit, join_room, leave_room, disconnect
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from datetime import datetime
@@ -72,6 +72,7 @@ TIMEZONE_MAP = {
     "태국": "Asia/Bangkok"
 }
 room_users = {room: 0 for room in CHAT_ROOMS}  # 인원 관리
+user_rooms = {}  # 각 연결별 사용자가 들어간 방 추적 {sid: room}
 
 # -----------------------------
 # 공통 템플릿 변수
@@ -84,7 +85,6 @@ def inject_user_and_subscription_and_times():
         if user:
             subscribed = Subscriber.query.filter_by(email=user.email).first() is not None
 
-    # 초기 로딩 시각 (JS에서 계속 갱신)
     room_times = {}
     for room in CHAT_ROOMS:
         try:
@@ -326,9 +326,12 @@ def on_join(data):
 
     # 인원 증가
     room_users[room] = max(0, room_users.get(room, 0)) + 1
+    user_rooms[request.sid] = room  # 연결 추적
 
     ts = datetime.now().strftime("%H:%M:%S")
     emit('receive_message', {'user':'시스템','msg':f'{nickname}님이 입장했습니다.','time':ts}, room=room)
+
+    # 입장 즉시 인원수 전달
     socketio.emit('room_users_update', room_users, broadcast=True)
 
 @socketio.on('leave')
@@ -337,13 +340,22 @@ def on_leave(data):
     nickname = data.get('user','익명')
     leave_room(room)
 
-    # ✅ 안전하게 감소 처리
     if room in room_users and room_users[room] > 0:
         room_users[room] -= 1
+
+    user_rooms.pop(request.sid, None)
 
     ts = datetime.now().strftime("%H:%M:%S")
     emit('receive_message', {'user':'시스템','msg':f'{nickname}님이 퇴장했습니다.', 'time':ts}, room=room)
     socketio.emit('room_users_update', room_users, broadcast=True)
+
+@socketio.on('disconnect')
+def on_disconnect():
+    """브라우저 닫기 / 새로고침 등 비정상 종료 시 인원수 반영"""
+    room = user_rooms.pop(request.sid, None)
+    if room and room in room_users and room_users[room] > 0:
+        room_users[room] -= 1
+        socketio.emit('room_users_update', room_users, broadcast=True)
 
 @socketio.on('send_message')
 def handle_send_message(data):
