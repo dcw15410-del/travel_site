@@ -21,7 +21,6 @@ basedir = os.path.abspath(os.path.dirname(__file__))
 app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{os.path.join(basedir, 'travel_site.db')}"
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# 업로드 폴더
 UPLOAD_FOLDER = os.path.join(basedir, 'static', 'uploads')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
@@ -72,23 +71,20 @@ TIMEZONE_MAP = {
     "필리핀": "Asia/Manila",
     "태국": "Asia/Bangkok"
 }
-
-# 방별 접속 인원 추적
-room_users = {room: set() for room in CHAT_ROOMS}
+room_users = {room: 0 for room in CHAT_ROOMS}  # 인원 관리
 
 # -----------------------------
 # 공통 템플릿 변수
 # -----------------------------
 @app.context_processor
 def inject_user_and_subscription_and_times():
-    user = None
-    subscribed = False
+    user, subscribed = None, False
     if "user_id" in session:
         user = User.query.get(session["user_id"])
         if user:
             subscribed = Subscriber.query.filter_by(email=user.email).first() is not None
 
-    # 현지 시각
+    # 초기 로딩 시각 (JS에서 계속 갱신)
     room_times = {}
     for room in CHAT_ROOMS:
         try:
@@ -97,15 +93,12 @@ def inject_user_and_subscription_and_times():
         except Exception:
             room_times[room] = datetime.utcnow().strftime("%H:%M:%S")
 
-    # 접속자 수
-    room_counts = {room: len(users) for room, users in room_users.items()}
-
     return dict(
         current_user=user,
         is_subscribed=subscribed,
         chat_rooms=CHAT_ROOMS,
         room_times=room_times,
-        room_counts=room_counts
+        room_users=room_users
     )
 
 # -----------------------------
@@ -241,7 +234,7 @@ def subscribe():
 # 채팅 라우트
 # -----------------------------
 @app.route('/chat')
-def chat_rooms():
+def chat_rooms_view():
     return render_template('chat_rooms.html')
 
 @app.route('/chat/<room>')
@@ -251,7 +244,7 @@ def chat(room):
         return redirect(url_for('login'))
     if room not in CHAT_ROOMS:
         flash("존재하지 않는 채팅방입니다.")
-        return redirect(url_for('chat_rooms'))
+        return redirect(url_for('chat_rooms_view'))
     user = User.query.get(session['user_id'])
     return render_template('chat.html', messages=[], user=user, room=room)
 
@@ -292,8 +285,8 @@ def convert_currency_api():
         data = resp.json()
 
         if data.get("result") is not None:
-            result = round(data.get("result", 0), 2)
-            rate = data.get("info", {}).get("rate", 0)
+            result = round(data.get("result", 4), 4)
+            rate = round(data.get("info", {}).get("rate", 0), 6)
             return jsonify({"result": result, "rate": rate})
 
         backup_url = f"https://open.er-api.com/v6/latest/{from_cur}"
@@ -302,7 +295,7 @@ def convert_currency_api():
 
         if data2.get("result") == "success" and to_cur in data2.get("rates", {}):
             rate = data2["rates"][to_cur]
-            return jsonify({"result": round(amount * rate, 2), "rate": rate})
+            return jsonify({"result": round(amount * rate, 4), "rate": round(rate, 6)})
 
         return jsonify({"error": "환율 계산 실패"}), 500
 
@@ -329,30 +322,20 @@ def on_join(data):
     room = data.get('room','한국')
     nickname = data.get('user','익명')
     join_room(room)
-
-    # 인원 수 갱신
-    room_users.setdefault(room, set()).add(nickname)
-
+    room_users[room] += 1
     ts = datetime.now().strftime("%H:%M:%S")
-    emit('receive_message',
-         {'user':'시스템','msg':f'{nickname}님이 입장했습니다.','time':ts}, room=room)
-    emit('update_user_count',
-         {'room': room, 'count': len(room_users[room])}, room=room)
+    emit('receive_message', {'user':'시스템','msg':f'{nickname}님이 입장했습니다.','time':ts}, room=room)
+    socketio.emit('room_users_update', room_users, broadcast=True)
 
 @socketio.on('leave')
 def on_leave(data):
     room = data.get('room','한국')
     nickname = data.get('user','익명')
     leave_room(room)
-
-    if room in room_users and nickname in room_users[room]:
-        room_users[room].remove(nickname)
-
+    room_users[room] = max(0, room_users[room]-1)
     ts = datetime.now().strftime("%H:%M:%S")
-    emit('receive_message',
-         {'user':'시스템','msg':f'{nickname}님이 퇴장했습니다.', 'time':ts}, room=room)
-    emit('update_user_count',
-         {'room': room, 'count': len(room_users[room])}, room=room)
+    emit('receive_message', {'user':'시스템','msg':f'{nickname}님이 퇴장했습니다.', 'time':ts}, room=room)
+    socketio.emit('room_users_update', room_users, broadcast=True)
 
 @socketio.on('send_message')
 def handle_send_message(data):

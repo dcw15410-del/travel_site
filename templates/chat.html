@@ -1,49 +1,85 @@
-{% extends "base.html" %}
-{% block content %}
-<div class="container mt-4">
-  <h2>{{ room }} 채팅방</h2>
-  <p>현지 시각: <strong>{{ room_times[room] }}</strong></p>
-  <div id="chat-box" class="border p-3 mb-3" style="height:400px; overflow-y:scroll;">
-    {% for msg in messages %}
-      <div><strong>{{ msg.nickname }}:</strong> {{ msg.text }} <small class="text-muted">{{ msg.created_at.strftime("%H:%M:%S") }}</small></div>
-    {% endfor %}
-  </div>
-  <form id="chat-form" class="d-flex">
-    <input id="message" type="text" class="form-control me-2" placeholder="메시지를 입력하세요">
-    <button class="btn btn-primary" type="submit">전송</button>
-  </form>
-</div>
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ room }} 채팅방</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+</head>
+<body>
+    <h2>{{ room }} 채팅방</h2>
+    <p>접속 인원: <span id="user-count">{{ room_users[room] }}</span>명</p>
+    <p>현재 시각: <span id="room-time">{{ room_times[room] }}</span></p>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
-<script>
-  const socket = io();
-  const room = "{{ room }}";
-  const user = "{{ user.nickname }}";
+    <div id="chat-box" style="border:1px solid #ccc; height:300px; overflow-y:scroll; margin-bottom:10px; padding:5px;">
+        {% for m in messages %}
+        <div><b>{{ m.nickname }}</b> [{{ m.created_at.strftime("%H:%M:%S") }}]: {{ m.text }}</div>
+        {% endfor %}
+    </div>
 
-  socket.emit('join', {room: room, user: user});
+    <input type="text" id="msg" placeholder="메시지를 입력하세요" style="width:70%;">
+    <button onclick="sendMessage()">보내기</button>
 
-  const chatBox = document.getElementById("chat-box");
-  const form = document.getElementById("chat-form");
-  const input = document.getElementById("message");
+    <script>
+        const socket = io();
+        const room = "{{ room }}";
+        const nickname = "{{ user.nickname }}";
 
-  socket.on('receive_message', function(data){
-    const div = document.createElement("div");
-    div.innerHTML = `<strong>${data.user}:</strong> ${data.msg} <small class="text-muted">${data.time}</small>`;
-    chatBox.appendChild(div);
-    chatBox.scrollTop = chatBox.scrollHeight;
-  });
+        // 채팅방 입장
+        socket.emit("join", {room: room, user: nickname});
 
-  form.addEventListener("submit", function(e){
-    e.preventDefault();
-    const msg = input.value;
-    if(msg.trim() !== ""){
-      socket.emit("send_message", {room: room, user: user, msg: msg});
-      input.value = "";
-    }
-  });
+        // 메시지 수신
+        socket.on("receive_message", function(data) {
+            let chatBox = document.getElementById("chat-box");
+            let div = document.createElement("div");
+            div.innerHTML = "<b>" + data.user + "</b> [" + data.time + "]: " + data.msg;
+            chatBox.appendChild(div);
+            chatBox.scrollTop = chatBox.scrollHeight;
+        });
 
-  window.addEventListener("beforeunload", function(){
-    socket.emit("leave", {room: room, user: user});
-  });
-</script>
-{% endblock %}
+        // 인원수 업데이트
+        socket.on("room_users_update", function(data) {
+            if (room in data) {
+                document.getElementById("user-count").innerText = data[room];
+            }
+        });
+
+        // 메시지 전송
+        function sendMessage() {
+            let msg = document.getElementById("msg").value;
+            if (msg.trim() === "") return;
+            socket.emit("send_message", {room: room, user: nickname, msg: msg});
+            document.getElementById("msg").value = "";
+        }
+
+        // 퇴장 시 leave 이벤트
+        window.addEventListener("beforeunload", function() {
+            socket.emit("leave", {room: room, user: nickname});
+        });
+
+        // 실시간 시각 갱신
+        const timezones = {
+            "한국": "Asia/Seoul",
+            "일본": "Asia/Tokyo",
+            "베트남": "Asia/Ho_Chi_Minh",
+            "필리핀": "Asia/Manila",
+            "태국": "Asia/Bangkok"
+        };
+
+        function updateRoomTime() {
+            const now = new Date();
+            try {
+                let tz = new Intl.DateTimeFormat("ko-KR", {
+                    timeZone: timezones[room],
+                    hour: "2-digit", minute: "2-digit", second: "2-digit"
+                }).format(now);
+                document.getElementById("room-time").innerText = tz;
+            } catch(e) {
+                console.error("시간 변환 오류:", e);
+            }
+        }
+        setInterval(updateRoomTime, 1000);
+        updateRoomTime();
+    </script>
+</body>
+</html>
