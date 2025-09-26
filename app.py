@@ -234,7 +234,7 @@ def subscribe():
 # 채팅 라우트
 # -----------------------------
 @app.route('/chat')
-def chat_rooms_view():
+def chat_rooms():
     return render_template('chat_rooms.html')
 
 @app.route('/chat/<room>')
