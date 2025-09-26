@@ -73,6 +73,9 @@ TIMEZONE_MAP = {
     "태국": "Asia/Bangkok"
 }
 
+# 방별 접속 인원 추적
+room_users = {room: set() for room in CHAT_ROOMS}
+
 # -----------------------------
 # 공통 템플릿 변수
 # -----------------------------
@@ -85,6 +88,7 @@ def inject_user_and_subscription_and_times():
         if user:
             subscribed = Subscriber.query.filter_by(email=user.email).first() is not None
 
+    # 현지 시각
     room_times = {}
     for room in CHAT_ROOMS:
         try:
@@ -93,7 +97,16 @@ def inject_user_and_subscription_and_times():
         except Exception:
             room_times[room] = datetime.utcnow().strftime("%H:%M:%S")
 
-    return dict(current_user=user, is_subscribed=subscribed, chat_rooms=CHAT_ROOMS, room_times=room_times)
+    # 접속자 수
+    room_counts = {room: len(users) for room, users in room_users.items()}
+
+    return dict(
+        current_user=user,
+        is_subscribed=subscribed,
+        chat_rooms=CHAT_ROOMS,
+        room_times=room_times,
+        room_counts=room_counts
+    )
 
 # -----------------------------
 # 메인 / 글 관련 라우트
@@ -240,7 +253,6 @@ def chat(room):
         flash("존재하지 않는 채팅방입니다.")
         return redirect(url_for('chat_rooms'))
     user = User.query.get(session['user_id'])
-    # DB 메시지는 불러오지 않음 → 빈 리스트 전달
     return render_template('chat.html', messages=[], user=user, room=room)
 
 # -----------------------------
@@ -317,16 +329,30 @@ def on_join(data):
     room = data.get('room','한국')
     nickname = data.get('user','익명')
     join_room(room)
+
+    # 인원 수 갱신
+    room_users.setdefault(room, set()).add(nickname)
+
     ts = datetime.now().strftime("%H:%M:%S")
-    emit('receive_message', {'user':'시스템','msg':f'{nickname}님이 입장했습니다.','time':ts}, room=room)
+    emit('receive_message',
+         {'user':'시스템','msg':f'{nickname}님이 입장했습니다.','time':ts}, room=room)
+    emit('update_user_count',
+         {'room': room, 'count': len(room_users[room])}, room=room)
 
 @socketio.on('leave')
 def on_leave(data):
     room = data.get('room','한국')
     nickname = data.get('user','익명')
     leave_room(room)
+
+    if room in room_users and nickname in room_users[room]:
+        room_users[room].remove(nickname)
+
     ts = datetime.now().strftime("%H:%M:%S")
-    emit('receive_message', {'user':'시스템','msg':f'{nickname}님이 퇴장했습니다.', 'time':ts}, room=room)
+    emit('receive_message',
+         {'user':'시스템','msg':f'{nickname}님이 퇴장했습니다.', 'time':ts}, room=room)
+    emit('update_user_count',
+         {'room': room, 'count': len(room_users[room])}, room=room)
 
 @socketio.on('send_message')
 def handle_send_message(data):
