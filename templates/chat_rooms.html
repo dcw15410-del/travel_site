@@ -1,44 +1,54 @@
 {% extends "base.html" %}
-{% block title %}채팅방 목록{% endblock %}
-{% block content %}
-<h2 class="mb-4">채팅방 목록</h2>
-<div class="row">
-  {% for room in chat_rooms %}
-    <div class="col-md-4 mb-3">
-      <div class="card shadow-sm">
-        <div class="card-body">
-          <h5 class="card-title">{{ room }}</h5>
-          <p class="card-text">
-            현재 인원: <span id="count-{{ room }}">{{ room_users[room] }}</span>명<br>
-            현지 시각: <span id="time-{{ room }}">{{ room_times[room] }}</span>
-          </p>
-          <a href="{{ url_for('chat', room=room) }}" class="btn btn-primary">입장하기</a>
-        </div>
-      </div>
-    </div>
-  {% endfor %}
-</div>
-{% endblock %}
 
-{% block extra_script %}
-<script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+{% block title %}채팅방{% endblock %}
+
+{% block content %}
+<h2>채팅방</h2>
+
+<div class="mb-3">
+    <label for="room" class="form-label">채팅방 이름</label>
+    <input type="text" id="room" class="form-control" placeholder="채팅방 이름 입력">
+    <button id="joinBtn" class="btn btn-primary mt-2">입장</button>
+</div>
+
+<div id="chat" class="border p-3 mb-3" style="height:300px; overflow-y:scroll;"></div>
+
+<input type="text" id="msgInput" class="form-control" placeholder="메시지 입력">
+<button id="sendBtn" class="btn btn-success mt-2">전송</button>
+
 <script>
 const socket = io();
-socket.on("room_users_update", data => {
-  for (const [room, count] of Object.entries(data.counts)) {
-    const el = document.getElementById("count-" + room);
-    if (el) el.textContent = count;
-  }
+let currentRoom = '';
+let username = "{{ session['user'] if 'user' in session else '익명' }}";
+
+document.getElementById('joinBtn').onclick = () => {
+    const roomInput = document.getElementById('room').value;
+    if(roomInput) {
+        if(currentRoom) socket.emit('leave', {username, room: currentRoom});
+        currentRoom = roomInput;
+        socket.emit('join', {username, room: currentRoom});
+        document.getElementById('chat').innerHTML = '';
+    }
+};
+
+document.getElementById('sendBtn').onclick = () => {
+    const msg = document.getElementById('msgInput').value;
+    if(msg && currentRoom) {
+        socket.emit('message', {username, room: currentRoom, message: msg});
+        document.getElementById('msgInput').value = '';
+    }
+};
+
+socket.on('message', data => {
+    const chat = document.getElementById('chat');
+    chat.innerHTML += `<p><strong>${data.username}:</strong> ${data.message}</p>`;
+    chat.scrollTop = chat.scrollHeight;
 });
 
-// 현지 시각 클라이언트에서 매초 업데이트
-function updateClocks() {
-  const now = new Date();
-  {% for room in chat_rooms %}
-    document.getElementById("time-{{ room }}").textContent =
-      now.toLocaleTimeString("ko-KR", { hour12:false });
-  {% endfor %}
-}
-setInterval(updateClocks, 1000);
+socket.on('status', data => {
+    const chat = document.getElementById('chat');
+    chat.innerHTML += `<p><em>${data.msg}</em></p>`;
+    chat.scrollTop = chat.scrollHeight;
+});
 </script>
 {% endblock %}

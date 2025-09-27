@@ -1,287 +1,156 @@
-# -----------------------------
-# 중요: Eventlet 제거, threading 모드 사용
-# -----------------------------
 from flask import Flask, render_template, request, redirect, session, flash, url_for, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_socketio import SocketIO, emit, join_room, leave_room
 from werkzeug.security import generate_password_hash, check_password_hash
-from werkzeug.utils import secure_filename
 from datetime import datetime
-import os, pytz, requests, logging
 
-logging.basicConfig(level=logging.INFO)
-
-# -----------------------------
-# Flask 설정
-# -----------------------------
+# ----------------------------
+# 앱 초기화
+# ----------------------------
 app = Flask(__name__)
-app.secret_key = os.environ.get("SECRET_KEY", "change_this_secret_for_production")
-
-basedir = os.path.abspath(os.path.dirname(__file__))
-app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{os.path.join(basedir, 'travel_site.db')}"
+app.config['SECRET_KEY'] = 'your_secret_key'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///db.sqlite3'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-UPLOAD_FOLDER = os.path.join(basedir, 'static', 'uploads')
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-
 db = SQLAlchemy(app)
+socketio = SocketIO(app, async_mode='threading')
 
-# -----------------------------
-# SocketIO: threading 모드
-# -----------------------------
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
-
-# -----------------------------
+# ----------------------------
 # DB 모델
-# -----------------------------
+# ----------------------------
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(50), unique=True, nullable=False)
-    nickname = db.Column(db.String(50), unique=True, nullable=False)
-    email = db.Column(db.String(120), unique=True, nullable=False)
-    password_hash = db.Column(db.String(200), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    password = db.Column(db.String(200), nullable=False)
 
 class Post(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(200), nullable=False)
-    excerpt = db.Column(db.String(300), nullable=True)
     content = db.Column(db.Text, nullable=False)
-    image = db.Column(db.String(300), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
 
-class Subscriber(db.Model):
+class ChatMessage(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    email = db.Column(db.String(120), unique=True, nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    username = db.Column(db.String(50), nullable=False)
+    message = db.Column(db.Text, nullable=False)
+    room = db.Column(db.String(50), nullable=False)
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
 
-class Message(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    room = db.Column(db.String(100), nullable=False, default="한국")
-    nickname = db.Column(db.String(80), nullable=False)
-    text = db.Column(db.String(1000), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-
-# -----------------------------
-# 채팅방 & 타임존
-# -----------------------------
-CHAT_ROOMS = ["한국", "일본", "베트남", "필리핀", "태국"]
-TIMEZONE_MAP = {
-    "한국": "Asia/Seoul",
-    "일본": "Asia/Tokyo",
-    "베트남": "Asia/Ho_Chi_Minh",
-    "필리핀": "Asia/Manila",
-    "태국": "Asia/Bangkok"
-}
-
-room_members = {room: set() for room in CHAT_ROOMS}
-sid_map = {}
-
-def build_room_state_payload():
-    counts = {room: len(room_members.get(room, set())) for room in CHAT_ROOMS}
-    lists = {}
-    for room in CHAT_ROOMS:
-        names = []
-        for sid in room_members.get(room, set()):
-            info = sid_map.get(sid)
-            if info:
-                names.append(info.get('nick', '익명'))
-        lists[room] = names
-    return {"counts": counts, "lists": lists}
-
-# -----------------------------
-# 템플릿 공통 변수
-# -----------------------------
-@app.context_processor
-def inject_user_and_subscription_and_times():
-    user, subscribed = None, False
-    if "user_id" in session:
-        try:
-            user = User.query.get(session["user_id"])
-            subscribed = bool(user and Subscriber.query.filter_by(email=user.email).first())
-        except Exception:
-            user = None
-
-    room_times = {}
-    for room in CHAT_ROOMS:
-        try:
-            tz = pytz.timezone(TIMEZONE_MAP[room])
-            room_times[room] = datetime.now(tz).strftime("%H:%M:%S")
-        except Exception:
-            room_times[room] = datetime.utcnow().strftime("%H:%M:%S")
-
-    return dict(
-        current_user=user,
-        is_subscribed=subscribed,
-        chat_rooms=CHAT_ROOMS,
-        room_times=room_times,
-        room_users={r: len(room_members.get(r,set())) for r in CHAT_ROOMS},
-        timezone_map=TIMEZONE_MAP
-    )
-
-# -----------------------------
-# 라우트
-# -----------------------------
+# ----------------------------
+# 메인 페이지
+# ----------------------------
 @app.route('/')
 def index():
-    latest_posts = Post.query.order_by(Post.created_at.desc()).limit(3).all()
+    with app.app_context():
+        latest_posts = Post.query.order_by(Post.created_at.desc()).limit(3).all()
     return render_template("index.html", posts=latest_posts)
 
-@app.route('/posts')
-def posts():
-    all_posts = Post.query.order_by(Post.created_at.desc()).all()
-    return render_template("posts.html", posts=all_posts)
-
-@app.route('/post/<int:post_id>')
-def post_detail(post_id):
-    post = Post.query.get_or_404(post_id)
-    return render_template("post_detail.html", post=post)
-
-@app.route('/post/new', methods=['GET','POST'])
-def new_post():
-    if "user_id" not in session:
-        flash("로그인 후 작성 가능합니다.")
-        return redirect(url_for('login'))
-    if request.method == 'POST':
-        title = request.form.get('title','').strip()
-        content = request.form.get('content','').strip()
-        file = request.files.get('image')
-
-        if not title or not content:
-            flash("제목과 내용을 입력하세요.")
-            return redirect(url_for('new_post'))
-
-        filename = None
-        if file and file.filename:
-            filename = secure_filename(file.filename)
-            ext = os.path.splitext(filename)[1].lower()
-            if ext not in ['.png','.jpg','.jpeg','.gif']:
-                flash("허용되지 않는 파일 형식입니다.")
-                return redirect(url_for('new_post'))
-            file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-
-        excerpt = (content[:280] + '...') if len(content) > 280 else content
-        post = Post(title=title, content=content, excerpt=excerpt,
-                    image=filename, user_id=session['user_id'])
-        try:
-            db.session.add(post)
-            db.session.commit()
-        except Exception:
-            db.session.rollback()
-            flash("게시글 등록 중 오류 발생")
-            return redirect(url_for('new_post'))
-        flash("새 글이 등록되었습니다.")
-        return redirect(url_for('posts'))
-    return render_template("new_post.html")
-
-@app.route('/register', methods=['GET','POST'])
+# ----------------------------
+# 회원가입
+# ----------------------------
+@app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
-        username = request.form.get('username','').strip()
-        nickname = request.form.get('nickname','').strip()
-        email = request.form.get('email','').strip().lower()
-        password = request.form.get('password','').strip()
-        if not all([username, nickname, email, password]):
-            flash("모든 항목을 입력해주세요.")
-            return redirect(url_for('register'))
-        if User.query.filter((User.username==username)|(User.email==email)|(User.nickname==nickname)).first():
-            flash("이미 존재하는 계정입니다.")
-            return redirect(url_for('register'))
-        pw_hash = generate_password_hash(password)
-        try:
-            user = User(username=username, nickname=nickname, email=email, password_hash=pw_hash)
-            db.session.add(user)
-            db.session.commit()
-        except Exception:
-            db.session.rollback()
-            flash("회원가입 중 오류 발생")
-            return redirect(url_for('register'))
-        flash("회원가입 완료. 로그인 해주세요.")
-        return redirect(url_for('login'))
-    return render_template("register.html")
+        username = request.form['username']
+        password = request.form['password']
+        with app.app_context():
+            if User.query.filter_by(username=username).first():
+                flash("이미 존재하는 사용자입니다.")
+            else:
+                hashed_pw = generate_password_hash(password)
+                new_user = User(username=username, password=hashed_pw)
+                db.session.add(new_user)
+                db.session.commit()
+                flash("회원가입 완료")
+                return redirect(url_for('login'))
+    return render_template('register.html')
 
-@app.route('/login', methods=['GET','POST'])
+# ----------------------------
+# 로그인
+# ----------------------------
+@app.route('/login', methods=['GET', 'POST'])
 def login():
-    if request.method=='POST':
-        username = request.form.get('username','').strip()
-        password = request.form.get('password','').strip()
-        user = User.query.filter_by(username=username).first()
-        if user and check_password_hash(user.password_hash, password):
-            session['user_id'] = user.id
-            flash(f"{user.nickname}님 환영합니다.")
-            return redirect(url_for('index'))
-        flash("로그인 실패")
-        return redirect(url_for('login'))
-    return render_template("login.html")
+    if request.method == 'POST':
+        username = request.form['username']
+        password = request.form['password']
+        with app.app_context():
+            user = User.query.filter_by(username=username).first()
+            if user and check_password_hash(user.password, password):
+                session['user'] = user.username
+                flash("로그인 성공")
+                return redirect(url_for('index'))
+            else:
+                flash("아이디 또는 비밀번호가 잘못되었습니다.")
+    return render_template('login.html')
 
+# ----------------------------
+# 로그아웃
+# ----------------------------
 @app.route('/logout')
 def logout():
-    session.pop('user_id', None)
-    flash("로그아웃되었습니다.")
+    session.pop('user', None)
+    flash("로그아웃 되었습니다.")
     return redirect(url_for('index'))
 
-@app.route('/subscribe', methods=['POST'])
-def subscribe():
-    email = None
-    if "user_id" in session:
-        user = User.query.get(session['user_id'])
-        email = user.email if user else None
-    else:
-        email = request.form.get('email','').strip().lower()
-    if not email:
-        flash("이메일이 필요합니다.")
-        return redirect(url_for('index'))
-    if Subscriber.query.filter_by(email=email).first():
-        flash("이미 구독 중입니다.")
-    else:
-        try:
-            sub = Subscriber(email=email)
-            db.session.add(sub)
+# ----------------------------
+# 글 작성
+# ----------------------------
+@app.route('/new_post', methods=['GET', 'POST'])
+def new_post():
+    if 'user' not in session:
+        flash("로그인이 필요합니다.")
+        return redirect(url_for('login'))
+
+    if request.method == 'POST':
+        title = request.form['title']
+        content = request.form['content']
+        with app.app_context():
+            post = Post(title=title, content=content)
+            db.session.add(post)
             db.session.commit()
-            flash("구독 완료.")
-        except Exception:
-            db.session.rollback()
-            flash("구독 중 오류 발생")
-    return redirect(request.referrer or url_for('index'))
+        flash("글 작성 완료")
+        return redirect(url_for('index'))
+    return render_template('new_post.html')
 
-# -----------------------------
-# 환율 계산 라우트
-# -----------------------------
-@app.route('/currency')
-def convert_currency_api():
-    from_cur = request.args.get("from")
-    to_cur = request.args.get("to")
-    try:
-        amount = float(request.args.get('amount', '1') or '1')
-    except Exception:
-        amount = 1.0
+# ----------------------------
+# 채팅방 리스트 페이지
+# ----------------------------
+@app.route('/chat')
+def chat_rooms():
+    return render_template('chat_rooms.html')
 
-    if not from_cur or not to_cur:
-        return jsonify({"error": "통화 파라미터 필요"}), 400
+# ----------------------------
+# SocketIO 이벤트
+# ----------------------------
+@socketio.on('join')
+def handle_join(data):
+    username = data['username']
+    room = data['room']
+    join_room(room)
+    emit('status', {'msg': f'{username}님이 입장했습니다.'}, room=room)
 
-    try:
-        url = f"https://api.exchangerate.host/convert?from={from_cur}&to={to_cur}&amount={amount}"
-        resp = requests.get(url, timeout=7)
-        data = resp.json()
-        if data.get("result") is not None:
-            result = round(data.get("result", 0), 4)
-            rate = data.get("info", {}).get("rate", 0)
-            return jsonify({"result": result, "rate": rate})
-        return jsonify({"error": "환율 계산 실패"}), 500
-    except Exception as e:
-        logging.exception("환율 API 오류")
-        return jsonify({"error": f"서버 오류: {str(e)}"}), 500
+@socketio.on('message')
+def handle_message(data):
+    username = data['username']
+    room = data['room']
+    message = data['message']
+    with app.app_context():
+        chat_msg = ChatMessage(username=username, message=message, room=room)
+        db.session.add(chat_msg)
+        db.session.commit()
+    emit('message', {'username': username, 'message': message}, room=room)
 
-# -----------------------------
-# 나머지 채팅 / SocketIO 코드는 그대로 threading 모드 적용
-# -----------------------------
-# 여기에 이전 SocketIO 이벤트 코드 붙이면 됩니다 (threading 모드)
-# -----------------------------
+@socketio.on('leave')
+def handle_leave(data):
+    username = data['username']
+    room = data['room']
+    leave_room(room)
+    emit('status', {'msg': f'{username}님이 나갔습니다.'}, room=room)
 
-with app.app_context():
-    db.create_all()
-
+# ----------------------------
+# 앱 실행
+# ----------------------------
 if __name__ == '__main__':
-    socketio.run(app, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=True)
+    with app.app_context():
+        db.create_all()
+    socketio.run(app, host='0.0.0.0', port=5000)
