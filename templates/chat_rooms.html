@@ -1,12 +1,29 @@
-{% extends "base.html" %}
-{% block title %}채팅방{% endblock %}
-{% block content %}
-<h1>채팅방</h1>
-<div class="list-group">
-    {% for room in chat_rooms %}
-        <a href="{{ url_for('chat', room=room) }}" class="list-group-item list-group-item-action">
-            {{ room }} ({{ room_users[room] }}명)
-        </a>
-    {% endfor %}
-</div>
-{% endblock %}
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>채팅방 목록</title>
+    <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
+</head>
+<body>
+    <h1>채팅방 목록</h1>
+    <ul>
+        {% for room in chat_rooms %}
+            <li>
+                <a href="{{ url_for('chat', room=room) }}">{{ room }}</a>
+                - 현지 시각: {{ room_times[room] }}
+                - 접속 인원: <span id="users_{{ room }}">{{ room_users[room] }}</span>
+            </li>
+        {% endfor %}
+    </ul>
+
+    <script>
+        const socket = io();
+        socket.on('room_users_update', function(data){
+            {% for room in chat_rooms %}
+                document.getElementById('users_{{ room }}').innerText = data['{{ room }}'];
+            {% endfor %}
+        });
+    </script>
+</body>
+</html>

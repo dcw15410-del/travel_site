@@ -1,34 +1,46 @@
-{% extends "base.html" %}
-{% block title %}채팅 - {{ room }}{% endblock %}
-{% block content %}
-<h1>{{ room }} 채팅방</h1>
-<div id="messages" class="border p-3 mb-3" style="height:300px; overflow-y:scroll;">
-    {% for msg in messages %}
-        <div><strong>{{ msg.nickname }}:</strong> {{ msg.text }} <small>{{ msg.created_at.strftime("%H:%M:%S") }}</small></div>
-    {% endfor %}
-</div>
-<input type="text" id="msgInput" class="form-control mb-2" placeholder="메시지를 입력하세요">
-<button id="sendBtn" class="btn btn-primary">전송</button>
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>채팅 - {{ room }}</title>
+    <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
+</head>
+<body>
+    <h1>{{ room }} 채팅방</h1>
+    <div id="chat_box" style="border:1px solid #000; height:300px; overflow:auto;"></div>
+    <input type="text" id="msg_input" placeholder="메시지 입력">
+    <button id="send_btn">전송</button>
 
-<script>
-const socket = io();
-const room = "{{ room }}";
-const user = "{{ current_user.nickname if current_user else '익명' }}";
+    <script>
+        const socket = io();
+        const room = "{{ room }}";
+        const user = "{{ current_user.nickname if current_user else '익명' }}";
+        const chat_box = document.getElementById('chat_box');
 
-socket.emit('join', {room, user});
+        // 입장 이벤트
+        socket.emit('join', {room: room, user: user});
 
-socket.on('receive_message', function(data){
-    const messagesDiv = document.getElementById('messages');
-    messagesDiv.innerHTML += `<div><strong>${data.user}:</strong> ${data.msg} <small>${data.time}</small></div>`;
-    messagesDiv.scrollTop = messagesDiv.scrollHeight;
-});
+        // 메시지 수신
+        socket.on('receive_message', function(data){
+            const p = document.createElement('p');
+            p.innerText = `[${data.time}] ${data.user}: ${data.msg}`;
+            chat_box.appendChild(p);
+            chat_box.scrollTop = chat_box.scrollHeight;
+        });
 
-document.getElementById('sendBtn').onclick = function(){
-    const input = document.getElementById('msgInput');
-    if(input.value.trim() !== ''){
-        socket.emit('send_message', {room: room, msg: input.value});
-        input.value = '';
-    }
-};
-</script>
-{% endblock %}
+        // 메시지 전송
+        document.getElementById('send_btn').onclick = function(){
+            const msg = document.getElementById('msg_input').value.trim();
+            if(msg){
+                socket.emit('send_message', {room: room, msg: msg, user: user});
+                document.getElementById('msg_input').value = '';
+            }
+        };
+
+        // 나가기 이벤트
+        window.addEventListener('beforeunload', function(){
+            socket.emit('leave', {room: room, user: user});
+        });
+    </script>
+</body>
+</html>

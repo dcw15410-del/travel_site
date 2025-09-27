@@ -1,7 +1,26 @@
-{% extends "base.html" %}
-{% block title %}지도{% endblock %}
-{% block content %}
-<h1>지도</h1>
-<p>여기에 지도 API를 연동하거나 마커를 표시할 수 있습니다.</p>
-<div class="border" style="height:400px;">지도 영역</div>
-{% endblock %}
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>지도</title>
+    <style>
+        #map { height: 500px; width: 100%; }
+    </style>
+</head>
+<body>
+    <h1>구글 지도</h1>
+    <div id="map"></div>
+    <script>
+        function initMap() {
+            const center = { lat: 37.5665, lng: 126.9780 }; // 서울
+            const map = new google.maps.Map(document.getElementById("map"), {
+                zoom: 6,
+                center: center,
+            });
+        }
+    </script>
+    <script async
+        src="https://maps.googleapis.com/maps/api/js?key=YOUR_API_KEY&callback=initMap">
+    </script>
+</body>
+</html>

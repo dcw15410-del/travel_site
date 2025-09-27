@@ -1,16 +1,20 @@
-{% extends "base.html" %}
-{% block title %}{{ post.title }}{% endblock %}
-{% block content %}
-<h1>{{ post.title }}</h1>
-<p>작성일: {{ post.created_at.strftime("%Y-%m-%d %H:%M") }}</p>
-{% if post.image %}
-    <img src="{{ url_for('static', filename='uploads/' + post.image) }}" class="img-fluid mb-3">
-{% endif %}
-<p>{{ post.content }}</p>
-
-{% if current_user and current_user.id == post.user_id %}
-<form action="{{ url_for('delete_post', post_id=post.id) }}" method="post">
-    <button class="btn btn-danger">삭제</button>
-</form>
-{% endif %}
-{% endblock %}
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ post.title }}</title>
+</head>
+<body>
+    <h1>{{ post.title }}</h1>
+    <p>{{ post.content }}</p>
+    {% if post.image %}
+        <img src="{{ url_for('static', filename='uploads/' ~ post.image) }}" alt="Post Image" style="max-width:500px;">
+    {% endif %}
+    {% if current_user and current_user.id == post.user_id %}
+        <form action="{{ url_for('delete_post', post_id=post.id) }}" method="post">
+            <button type="submit">삭제</button>
+        </form>
+    {% endif %}
+    <a href="{{ url_for('posts') }}">게시글 목록으로</a>
+</body>
+</html>

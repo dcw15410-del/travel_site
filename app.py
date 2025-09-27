@@ -247,8 +247,7 @@ def chat(room):
         flash("존재하지 않는 채팅방입니다.")
         return redirect(url_for('chat_rooms'))
     user = User.query.get(session['user_id'])
-    messages = Message.query.filter_by(room=room).order_by(Message.created_at.asc()).all()
-    return render_template('chat.html', messages=messages, user=user, room=room)
+    return render_template('chat.html', messages=[], user=user, room=room)
 
 # -----------------------------
 # 지도 라우트
@@ -325,11 +324,14 @@ def on_join(data):
     nickname = data.get('user','익명')
     join_room(room)
 
+    # 인원 증가
     room_users[room] = max(0, room_users.get(room, 0)) + 1
-    user_rooms[request.sid] = room
+    user_rooms[request.sid] = room  # 연결 추적
 
     ts = datetime.now().strftime("%H:%M:%S")
     emit('receive_message', {'user':'시스템','msg':f'{nickname}님이 입장했습니다.','time':ts}, room=room)
+
+    # 입장 즉시 인원수 전달
     socketio.emit('room_users_update', room_users, broadcast=True)
 
 @socketio.on('leave')
@@ -349,6 +351,7 @@ def on_leave(data):
 
 @socketio.on('disconnect')
 def on_disconnect():
+    """브라우저 닫기 / 새로고침 등 비정상 종료 시 인원수 반영"""
     room = user_rooms.pop(request.sid, None)
     if room and room in room_users and room_users[room] > 0:
         room_users[room] -= 1

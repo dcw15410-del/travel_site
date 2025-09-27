@@ -1,10 +1,16 @@
-{% extends "base.html" %}
-{% block title %}로그인{% endblock %}
-{% block content %}
-<h1>로그인</h1>
-<form action="" method="post">
-    <div class="mb-3"><input type="text" name="username" placeholder="아이디" class="form-control" required></div>
-    <div class="mb-3"><input type="password" name="password" placeholder="비밀번호" class="form-control" required></div>
-    <button class="btn btn-primary" type="submit">로그인</button>
-</form>
-{% endblock %}
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>로그인</title>
+</head>
+<body>
+    <h1>로그인</h1>
+    <form action="{{ url_for('login') }}" method="post">
+        <p>아이디: <input type="text" name="username" required></p>
+        <p>비밀번호: <input type="password" name="password" required></p>
+        <button type="submit">로그인</button>
+    </form>
+    <a href="{{ url_for('register') }}">회원가입</a>
+</body>
+</html>

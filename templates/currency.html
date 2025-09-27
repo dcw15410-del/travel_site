@@ -1,41 +1,36 @@
-{% extends "base.html" %}
-{% block title %}환율 계산{% endblock %}
-{% block content %}
-<h1>환율 계산</h1>
-<div class="row mb-3">
-    <div class="col"><input type="number" id="amount" class="form-control" placeholder="금액" value="1"></div>
-    <div class="col">
-        <select id="from_cur" class="form-select">
-            {% for code,name in currencies.items() %}
-                <option value="{{ code }}">{{ name }}({{ code }})</option>
-            {% endfor %}
-        </select>
-    </div>
-    <div class="col">
-        <select id="to_cur" class="form-select">
-            {% for code,name in currencies.items() %}
-                <option value="{{ code }}">{{ name }}({{ code }})</option>
-            {% endfor %}
-        </select>
-    </div>
-    <div class="col"><button id="convertBtn" class="btn btn-primary">변환</button></div>
-</div>
-<div id="result"></div>
-
-<script>
-document.getElementById('convertBtn').onclick = function(){
-    const amount = document.getElementById('amount').value;
-    const from_cur = document.getElementById('from_cur').value;
-    const to_cur = document.getElementById('to_cur').value;
-    fetch(`/convert_currency?from=${from_cur}&to=${to_cur}&amount=${amount}`)
-        .then(r=>r.json())
-        .then(data=>{
-            if(data.result){
-                document.getElementById('result').innerText = `${amount} ${from_cur} = ${data.result} ${to_cur} (환율: ${data.rate})`;
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>환율 계산</title>
+    <script>
+        async function convert(){
+            const from = document.getElementById('from').value;
+            const to = document.getElementById('to').value;
+            const amount = document.getElementById('amount').value;
+            const res = await fetch(`/convert_currency?from=${from}&to=${to}&amount=${amount}`);
+            const data = await res.json();
+            if(data.result !== undefined){
+                document.getElementById('result').innerText = `${amount} ${from} = ${data.result} ${to} (환율: ${data.rate})`;
             } else {
-                document.getElementById('result').innerText = `오류: ${data.error}`;
+                document.getElementById('result').innerText = data.error;
             }
-        });
-};
-</script>
-{% endblock %}
+        }
+    </script>
+</head>
+<body>
+    <h1>환율 계산</h1>
+    <p>
+        <select id="from">
+            {% for k,v in currencies.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}
+        </select>
+        →
+        <select id="to">
+            {% for k,v in currencies.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}
+        </select>
+    </p>
+    <p>금액: <input type="number" id="amount" value="1"></p>
+    <button onclick="convert()">변환</button>
+    <p id="result"></p>
+</body>
+</html>
