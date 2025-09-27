@@ -1,16 +1,11 @@
-<!DOCTYPE html>
-<html lang="ko">
-<head>
-    <meta charset="UTF-8">
-    <title>로그인</title>
-</head>
-<body>
-    <h1>로그인</h1>
-    <form action="{{ url_for('login') }}" method="post">
-        <p>아이디: <input type="text" name="username" required></p>
-        <p>비밀번호: <input type="password" name="password" required></p>
-        <button type="submit">로그인</button>
-    </form>
-    <a href="{{ url_for('register') }}">회원가입</a>
-</body>
-</html>
+{% extends "base.html" %}
+{% block title %}로그인{% endblock %}
+{% block content %}
+<h2>로그인</h2>
+<form method="POST">
+    <label>아이디: <input type="text" name="username"></label><br>
+    <label>비밀번호: <input type="password" name="password"></label><br>
+    <button type="submit">로그인</button>
+</form>
+<button onclick="history.back()">돌아가기</button>
+{% endblock %}

@@ -247,17 +247,21 @@ def chat(room):
         flash("존재하지 않는 채팅방입니다.")
         return redirect(url_for('chat_rooms'))
     user = User.query.get(session['user_id'])
-    return render_template('chat.html', messages=[], user=user, room=room)
+    # 이전 메시지 불러오기
+    messages = Message.query.filter_by(room=room).order_by(Message.created_at.asc()).all()
+    return render_template('chat.html', messages=messages, user=user, room=room)
 
 # -----------------------------
 # 지도 라우트
 # -----------------------------
 @app.route('/map')
 def map_view():
-    return render_template("map.html")
+    # 기본 위치: 인천공항
+    default_location = {'lat': 37.4602, 'lng': 126.4407}
+    return render_template("map.html", location=default_location)
 
 # -----------------------------
-# 환율 계산 API
+# 환율 계산 API & 페이지
 # -----------------------------
 @app.route('/convert_currency')
 def convert_currency_api():
@@ -290,22 +294,11 @@ def convert_currency_api():
             rate = round(data.get("info", {}).get("rate", 0), 6)
             return jsonify({"result": result, "rate": rate})
 
-        backup_url = f"https://open.er-api.com/v6/latest/{from_cur}"
-        r2 = requests.get(backup_url, timeout=10)
-        data2 = r2.json()
-
-        if data2.get("result") == "success" and to_cur in data2.get("rates", {}):
-            rate = data2["rates"][to_cur]
-            return jsonify({"result": round(amount * rate, 4), "rate": round(rate, 6)})
-
         return jsonify({"error": "환율 계산 실패"}), 500
 
     except Exception as e:
         return jsonify({"error": f"서버 오류: {str(e)}"}), 500
 
-# -----------------------------
-# 환율 계산 페이지
-# -----------------------------
 @app.route('/currency')
 def currency_page():
     currencies = {
@@ -323,15 +316,11 @@ def on_join(data):
     room = data.get('room','한국')
     nickname = data.get('user','익명')
     join_room(room)
-
-    # 인원 증가
-    room_users[room] = max(0, room_users.get(room, 0)) + 1
-    user_rooms[request.sid] = room  # 연결 추적
+    room_users[room] = room_users.get(room,0) + 1
+    user_rooms[request.sid] = room
 
     ts = datetime.now().strftime("%H:%M:%S")
     emit('receive_message', {'user':'시스템','msg':f'{nickname}님이 입장했습니다.','time':ts}, room=room)
-
-    # 입장 즉시 인원수 전달
     socketio.emit('room_users_update', room_users, broadcast=True)
 
 @socketio.on('leave')
@@ -339,19 +328,15 @@ def on_leave(data):
     room = data.get('room','한국')
     nickname = data.get('user','익명')
     leave_room(room)
-
     if room in room_users and room_users[room] > 0:
         room_users[room] -= 1
-
     user_rooms.pop(request.sid, None)
-
     ts = datetime.now().strftime("%H:%M:%S")
     emit('receive_message', {'user':'시스템','msg':f'{nickname}님이 퇴장했습니다.', 'time':ts}, room=room)
     socketio.emit('room_users_update', room_users, broadcast=True)
 
 @socketio.on('disconnect')
 def on_disconnect():
-    """브라우저 닫기 / 새로고침 등 비정상 종료 시 인원수 반영"""
     room = user_rooms.pop(request.sid, None)
     if room and room in room_users and room_users[room] > 0:
         room_users[room] -= 1

@@ -1,17 +1,12 @@
-<!DOCTYPE html>
-<html lang="ko">
-<head>
-    <meta charset="UTF-8">
-    <title>새 글 작성</title>
-</head>
-<body>
-    <h1>새 글 작성</h1>
-    <form action="{{ url_for('new_post') }}" method="post" enctype="multipart/form-data">
-        <p>제목: <input type="text" name="title" required></p>
-        <p>내용: <textarea name="content" rows="10" required></textarea></p>
-        <p>이미지: <input type="file" name="image"></p>
-        <button type="submit">등록</button>
-    </form>
-    <a href="{{ url_for('posts') }}">게시글 목록</a>
-</body>
-</html>
+{% extends "base.html" %}
+{% block title %}새 글 작성{% endblock %}
+{% block content %}
+<h2>새 글 작성</h2>
+<form method="POST" enctype="multipart/form-data">
+    <label>제목: <input type="text" name="title"></label><br>
+    <label>내용: <textarea name="content" rows="10"></textarea></label><br>
+    <label>이미지: <input type="file" name="image"></label><br>
+    <button type="submit">작성</button>
+</form>
+<button onclick="history.back()">돌아가기</button>
+{% endblock %}

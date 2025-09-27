@@ -1,26 +1,21 @@
-<!DOCTYPE html>
-<html lang="ko">
-<head>
-    <meta charset="UTF-8">
-    <title>지도</title>
-    <style>
-        #map { height: 500px; width: 100%; }
-    </style>
-</head>
-<body>
-    <h1>구글 지도</h1>
-    <div id="map"></div>
-    <script>
-        function initMap() {
-            const center = { lat: 37.5665, lng: 126.9780 }; // 서울
-            const map = new google.maps.Map(document.getElementById("map"), {
-                zoom: 6,
-                center: center,
-            });
-        }
-    </script>
-    <script async
-        src="https://maps.googleapis.com/maps/api/js?key=YOUR_API_KEY&callback=initMap">
-    </script>
-</body>
-</html>
+{% extends "base.html" %}
+{% block title %}지도{% endblock %}
+{% block head %}
+<script src="https://maps.googleapis.com/maps/api/js?key=YOUR_API_KEY"></script>
+<script>
+    function initMap() {
+        const loc = {lat: {{ location.lat }}, lng: {{ location.lng }} };
+        const map = new google.maps.Map(document.getElementById('map'), {
+            zoom: 12,
+            center: loc
+        });
+        const marker = new google.maps.Marker({position: loc, map});
+    }
+</script>
+{% endblock %}
+{% block content %}
+<h2>지도</h2>
+<div id="map" style="width:100%; height:500px;"></div>
+<script>initMap();</script>
+<button onclick="history.back()">돌아가기</button>
+{% endblock %}

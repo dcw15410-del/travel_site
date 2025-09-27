@@ -1,29 +1,13 @@
-<!DOCTYPE html>
-<html lang="ko">
-<head>
-    <meta charset="UTF-8">
-    <title>채팅방 목록</title>
-    <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
-</head>
-<body>
-    <h1>채팅방 목록</h1>
-    <ul>
-        {% for room in chat_rooms %}
-            <li>
-                <a href="{{ url_for('chat', room=room) }}">{{ room }}</a>
-                - 현지 시각: {{ room_times[room] }}
-                - 접속 인원: <span id="users_{{ room }}">{{ room_users[room] }}</span>
-            </li>
-        {% endfor %}
-    </ul>
-
-    <script>
-        const socket = io();
-        socket.on('room_users_update', function(data){
-            {% for room in chat_rooms %}
-                document.getElementById('users_{{ room }}').innerText = data['{{ room }}'];
-            {% endfor %}
-        });
-    </script>
-</body>
-</html>
+{% extends "base.html" %}
+{% block title %}채팅방 목록{% endblock %}
+{% block content %}
+<h2>채팅방 목록</h2>
+<ul>
+    {% for room in chat_rooms %}
+    <li>
+        <a href="{{ url_for('chat', room=room) }}">{{ room }}</a> (현재 접속: {{ room_users[room] }})
+    </li>
+    {% endfor %}
+</ul>
+<button onclick="history.back()">돌아가기</button>
+{% endblock %}

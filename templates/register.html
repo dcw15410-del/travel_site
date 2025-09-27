@@ -1,18 +1,13 @@
-<!DOCTYPE html>
-<html lang="ko">
-<head>
-    <meta charset="UTF-8">
-    <title>회원가입</title>
-</head>
-<body>
-    <h1>회원가입</h1>
-    <form action="{{ url_for('register') }}" method="post">
-        <p>아이디: <input type="text" name="username" required></p>
-        <p>닉네임: <input type="text" name="nickname" required></p>
-        <p>이메일: <input type="email" name="email" required></p>
-        <p>비밀번호: <input type="password" name="password" required></p>
-        <button type="submit">회원가입</button>
-    </form>
-    <a href="{{ url_for('login') }}">로그인</a>
-</body>
-</html>
+{% extends "base.html" %}
+{% block title %}회원가입{% endblock %}
+{% block content %}
+<h2>회원가입</h2>
+<form method="POST">
+    <label>아이디: <input type="text" name="username"></label><br>
+    <label>닉네임: <input type="text" name="nickname"></label><br>
+    <label>이메일: <input type="email" name="email"></label><br>
+    <label>비밀번호: <input type="password" name="password"></label><br>
+    <button type="submit">가입</button>
+</form>
+<button onclick="history.back()">돌아가기</button>
+{% endblock %}

@@ -1,38 +1,14 @@
-<!DOCTYPE html>
-<html lang="ko">
-<head>
-    <meta charset="UTF-8">
-    <title>여행 블로그</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-</head>
-<body>
-    <header>
-        <h1><a href="{{ url_for('index') }}">여행 블로그</a></h1>
-        <nav>
-            <a href="{{ url_for('posts') }}">게시글</a> |
-            <a href="{{ url_for('map_view') }}">지도</a> |
-            <a href="{{ url_for('chat_rooms') }}">채팅</a> |
-            <a href="{{ url_for('currency_page') }}">환율</a>
-            {% if current_user %}
-                | <span>{{ current_user.nickname }}</span>
-                <a href="{{ url_for('logout') }}">로그아웃</a>
-            {% else %}
-                | <a href="{{ url_for('login') }}">로그인</a>
-                | <a href="{{ url_for('register') }}">회원가입</a>
-            {% endif %}
-        </nav>
-    </header>
-
-    <main>
-        <h2>최신 게시글</h2>
-        <ul>
-            {% for post in posts %}
-                <li>
-                    <a href="{{ url_for('post_detail', post_id=post.id) }}">{{ post.title }}</a>
-                    <p>{{ post.excerpt }}</p>
-                </li>
-            {% endfor %}
-        </ul>
-    </main>
-</body>
-</html>
+{% extends "base.html" %}
+{% block title %}홈{% endblock %}
+{% block content %}
+<h2>최신 게시글</h2>
+<ul>
+    {% for post in posts %}
+    <li>
+        <a href="{{ url_for('post_detail', post_id=post.id) }}">{{ post.title }}</a>
+        <small>{{ post.created_at.strftime("%Y-%m-%d") }}</small>
+    </li>
+    {% endfor %}
+</ul>
+<a href="{{ url_for('posts') }}">전체 게시글 보기</a>
+{% endblock %}

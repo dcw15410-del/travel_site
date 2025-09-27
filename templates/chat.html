@@ -1,46 +1,50 @@
-<!DOCTYPE html>
-<html lang="ko">
-<head>
-    <meta charset="UTF-8">
-    <title>채팅 - {{ room }}</title>
-    <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
-</head>
-<body>
-    <h1>{{ room }} 채팅방</h1>
-    <div id="chat_box" style="border:1px solid #000; height:300px; overflow:auto;"></div>
-    <input type="text" id="msg_input" placeholder="메시지 입력">
-    <button id="send_btn">전송</button>
+{% extends "base.html" %}
+{% block title %}{{ room }} 채팅{% endblock %}
+{% block head %}
+<script>
+    const socket = io();
+    const room = "{{ room }}";
+    const user = "{{ user.nickname if user else '익명' }}";
+    window.onload = () => {
+        socket.emit('join', {room, user});
+        const form = document.getElementById('chat-form');
+        form.onsubmit = (e) => {
+            e.preventDefault();
+            const msgInput = document.getElementById('msg');
+            if(msgInput.value.trim() === '') return;
+            socket.emit('send_message', {room, msg: msgInput.value, user});
+            msgInput.value = '';
+        }
+    }
 
-    <script>
-        const socket = io();
-        const room = "{{ room }}";
-        const user = "{{ current_user.nickname if current_user else '익명' }}";
-        const chat_box = document.getElementById('chat_box');
+    socket.on('receive_message', data => {
+        const chat = document.getElementById('chat-box');
+        const msg = document.createElement('div');
+        msg.textContent = `[${data.time}] ${data.user}: ${data.msg}`;
+        chat.appendChild(msg);
+        chat.scrollTop = chat.scrollHeight;
+    });
 
-        // 입장 이벤트
-        socket.emit('join', {room: room, user: user});
+    socket.on('room_users_update', data => {
+        document.getElementById('user-count').textContent = data[room] || 0;
+    });
 
-        // 메시지 수신
-        socket.on('receive_message', function(data){
-            const p = document.createElement('p');
-            p.innerText = `[${data.time}] ${data.user}: ${data.msg}`;
-            chat_box.appendChild(p);
-            chat_box.scrollTop = chat_box.scrollHeight;
-        });
-
-        // 메시지 전송
-        document.getElementById('send_btn').onclick = function(){
-            const msg = document.getElementById('msg_input').value.trim();
-            if(msg){
-                socket.emit('send_message', {room: room, msg: msg, user: user});
-                document.getElementById('msg_input').value = '';
-            }
-        };
-
-        // 나가기 이벤트
-        window.addEventListener('beforeunload', function(){
-            socket.emit('leave', {room: room, user: user});
-        });
-    </script>
-</body>
-</html>
+    window.onbeforeunload = () => {
+        socket.emit('leave', {room, user});
+    }
+</script>
+{% endblock %}
+{% block content %}
+<h2>{{ room }} 채팅</h2>
+<p>현재 접속 인원: <span id="user-count">{{ room_users[room] }}</span></p>
+<div id="chat-box" style="border:1px solid #ccc; height:300px; overflow-y:scroll; padding:5px;">
+    {% for msg in messages %}
+    <div>[{{ msg.created_at.strftime("%H:%M:%S") }}] {{ msg.nickname }}: {{ msg.text }}</div>
+    {% endfor %}
+</div>
+<form id="chat-form">
+    <input type="text" id="msg" placeholder="메시지 입력" autocomplete="off">
+    <button type="submit">전송</button>
+</form>
+<button onclick="history.back()">돌아가기</button>
+{% endblock %}

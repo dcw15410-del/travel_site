@@ -2,47 +2,45 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Travel Site{% endblock %}</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/css/bootstrap.min.css">
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js" integrity="sha512-Rwz0fjdb+vJmAbxZJ7Czj+VZsp5+E5dFj1ZZn6mfsYfUAhOGa68fn3+FZx6hZOb+GzOclWzUigx7vM59fmxm9A==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    {% block head %}{% endblock %}
 </head>
 <body>
-<nav class="navbar navbar-expand-lg navbar-light bg-light mb-3">
-    <div class="container-fluid">
-        <a class="navbar-brand" href="{{ url_for('index') }}">Travel Site</a>
-        <div class="collapse navbar-collapse">
-            <ul class="navbar-nav me-auto">
-                <li class="nav-item"><a class="nav-link" href="{{ url_for('posts') }}">게시글</a></li>
-                <li class="nav-item"><a class="nav-link" href="{{ url_for('chat_rooms') }}">채팅</a></li>
-                <li class="nav-item"><a class="nav-link" href="{{ url_for('currency_page') }}">환율</a></li>
-                <li class="nav-item"><a class="nav-link" href="{{ url_for('map_view') }}">지도</a></li>
-            </ul>
-            <ul class="navbar-nav ms-auto">
-                {% if current_user %}
-                    <li class="nav-item"><span class="nav-link">{{ current_user.nickname }}님</span></li>
-                    <li class="nav-item"><a class="nav-link" href="{{ url_for('logout') }}">로그아웃</a></li>
-                {% else %}
-                    <li class="nav-item"><a class="nav-link" href="{{ url_for('login') }}">로그인</a></li>
-                    <li class="nav-item"><a class="nav-link" href="{{ url_for('register') }}">회원가입</a></li>
-                {% endif %}
-            </ul>
-        </div>
-    </div>
-</nav>
+    <header>
+        <h1><a href="{{ url_for('index') }}">Travel Site</a></h1>
+        <nav>
+            <a href="{{ url_for('index') }}">홈</a> |
+            <a href="{{ url_for('posts') }}">게시글</a> |
+            <a href="{{ url_for('chat_rooms') }}">채팅</a> |
+            <a href="{{ url_for('map_view') }}">지도</a> |
+            <a href="{{ url_for('currency_page') }}">환율</a> |
+            {% if current_user %}
+                <span>{{ current_user.nickname }}님</span>
+                <a href="{{ url_for('logout') }}">로그아웃</a>
+            {% else %}
+                <a href="{{ url_for('login') }}">로그인</a> |
+                <a href="{{ url_for('register') }}">회원가입</a>
+            {% endif %}
+        </nav>
+    </header>
 
-<div class="container">
-    {% with messages = get_flashed_messages() %}
-        {% if messages %}
-            <div class="alert alert-info">
-                {% for msg in messages %}
-                    <div>{{ msg }}</div>
-                {% endfor %}
-            </div>
-        {% endif %}
-    {% endwith %}
-    {% block content %}{% endblock %}
-</div>
+    <main>
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                <ul class="flash-messages">
+                    {% for msg in messages %}
+                        <li>{{ msg }}</li>
+                    {% endfor %}
+                </ul>
+            {% endif %}
+        {% endwith %}
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer>
+        <p>&copy; 2025 Travel Site</p>
+    </footer>
 </body>
 </html>
