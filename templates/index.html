@@ -1,20 +1,31 @@
 {% extends "base.html" %}
-
 {% block title %}메인{% endblock %}
-
 {% block content %}
-<h2>최신 게시글</h2>
-{% if posts %}
-    <ul class="list-group">
-        {% for post in posts %}
-            <li class="list-group-item">
-                <h5>{{ post.title }}</h5>
-                <p>{{ post.content[:100] }}{% if post.content|length > 100 %}...{% endif %}</p>
-                <small>{{ post.created_at.strftime('%Y-%m-%d %H:%M') }}</small>
-            </li>
-        {% endfor %}
-    </ul>
-{% else %}
-    <p>게시글이 없습니다.</p>
-{% endif %}
+<h1>최신 게시글</h1>
+<div class="row">
+    {% for post in posts %}
+    <div class="col-md-4 mb-3">
+        <div class="card">
+            {% if post.image %}
+            <img src="{{ url_for('static', filename='uploads/' + post.image) }}" class="card-img-top" alt="이미지">
+            {% endif %}
+            <div class="card-body">
+                <h5 class="card-title">{{ post.title }}</h5>
+                <p class="card-text">{{ post.excerpt }}</p>
+                <a href="{{ url_for('post_detail', post_id=post.id) }}" class="btn btn-primary">자세히 보기</a>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<h2>뉴스레터 구독</h2>
+<form action="{{ url_for('subscribe') }}" method="post">
+    {% if current_user %}
+        <input type="hidden" name="email" value="{{ current_user.email }}">
+    {% else %}
+        <input type="email" name="email" class="form-control mb-2" placeholder="이메일 입력">
+    {% endif %}
+    <button class="btn btn-success" type="submit">구독</button>
+</form>
 {% endblock %}

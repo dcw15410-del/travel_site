@@ -1,18 +1,20 @@
 {% extends "base.html" %}
-
-{% block title %}글쓰기{% endblock %}
-
+{% block title %}새 글 작성{% endblock %}
 {% block content %}
-<h2>글쓰기</h2>
-<form method="POST">
+<h1>새 글 작성</h1>
+<form action="" method="post" enctype="multipart/form-data">
     <div class="mb-3">
-        <label for="title" class="form-label">제목</label>
-        <input type="text" class="form-control" id="title" name="title" required>
+        <label>제목</label>
+        <input type="text" name="title" class="form-control" required>
     </div>
     <div class="mb-3">
-        <label for="content" class="form-label">내용</label>
-        <textarea class="form-control" id="content" name="content" rows="5" required></textarea>
+        <label>내용</label>
+        <textarea name="content" class="form-control" rows="5" required></textarea>
     </div>
-    <button type="submit" class="btn btn-success">작성</button>
+    <div class="mb-3">
+        <label>이미지</label>
+        <input type="file" name="image" class="form-control">
+    </div>
+    <button type="submit" class="btn btn-primary">등록</button>
 </form>
 {% endblock %}
