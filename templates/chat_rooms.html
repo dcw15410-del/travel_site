@@ -1,44 +1,49 @@
 {% extends "base.html" %}
 {% block title %}채팅방 목록{% endblock %}
-
 {% block content %}
-<h2>채팅방 목록</h2>
+<h2 class="mb-4 text-primary">채팅방 선택</h2>
 <div class="row">
-  {% for room in chat_rooms %}
-  <div class="col-md-4">
-    <div class="card mb-3">
-      <div class="card-body">
-        <h5 class="card-title">{{ room }}</h5>
-        <p class="card-text">
-          현재 인원: <span id="count-{{ room }}">{{ room_users[room] }}</span>명<br>
-          현지 시각: <span id="time-{{ room }}">{{ room_times[room] }}</span>
-        </p>
-        <a href="{{ url_for('chat', room=room) }}" class="btn btn-primary">입장하기</a>
-      </div>
+    {% for room in chat_rooms %}
+    <div class="col-md-4 mb-3">
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <h5 class="card-title">{{ room }}</h5>
+                <p class="card-text">
+                    현재 인원: <span id="count-{{ room }}">{{ room_users[room] }}</span><br>
+                    현지 시각: <span id="time-{{ room }}">{{ room_times[room] }}</span>
+                </p>
+                <a href="{{ url_for('chat', room=room) }}" class="btn btn-primary w-100">입장하기</a>
+            </div>
+        </div>
     </div>
-  </div>
-  {% endfor %}
+    {% endfor %}
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script>
-  const socket = io();
+const socket = io();
 
-  // 인원수 실시간 업데이트
-  socket.on("room_users_update", function(data){
+// 인원수 업데이트
+socket.on("room_users_update", data => {
     for (const [room, count] of Object.entries(data)) {
-      $("#count-" + room).text(count);
+        const el = document.getElementById(`count-${room}`);
+        if (el) el.textContent = count;
     }
-  });
+});
 
-  // 시각 업데이트 (클라이언트 기준)
-  function updateTimes() {
-    {% for room in chat_rooms %}
-      let now = new Date().toLocaleTimeString("ko-KR", {hour12:false});
-      $("#time-{{ room }}").text(now);
-    {% endfor %}
-  }
-  setInterval(updateTimes, 1000);
+// 시각 업데이트 (서버 context_processor 값 활용)
+setInterval(() => {
+    fetch(location.href, {cache: "no-store"})
+        .then(res => res.text())
+        .then(html => {
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(html, "text/html");
+            {% for room in chat_rooms %}
+                const timeEl = doc.getElementById("time-{{ room }}");
+                if (timeEl) document.getElementById("time-{{ room }}").textContent = timeEl.textContent;
+            {% endfor %}
+        });
+}, 10000);
 </script>
 {% endblock %}

@@ -1,51 +1,49 @@
 {% extends "base.html" %}
 {% block title %}{{ room }} 채팅방{% endblock %}
-
 {% block content %}
-<h2>{{ room }} 채팅방</h2>
-<div class="chat-box" id="chat-box"></div>
-<div class="chat-input">
-  <form id="chat-form">
-    <div class="input-group">
-      <input type="text" id="message" class="form-control" placeholder="메시지를 입력하세요">
-      <button class="btn btn-primary" type="submit">전송</button>
-    </div>
-  </form>
+<h2 class="mb-3 text-primary">{{ room }} 채팅방</h2>
+<div class="chat-box mb-3" id="chat-box">
+    {% for m in messages %}
+        <div class="chat-message"><strong>{{ m.nickname }}:</strong> {{ m.text }} <small class="text-muted">{{ m.created_at.strftime('%H:%M:%S') }}</small></div>
+    {% endfor %}
 </div>
-<div class="mt-3">
-  <a href="{{ url_for('chat_rooms') }}" class="btn btn-secondary">채팅방 목록으로</a>
-</div>
+<form id="chat-form" class="input-group">
+    <input id="chat-input" type="text" class="form-control" placeholder="메시지를 입력하세요">
+    <button class="btn btn-primary" type="submit">전송</button>
+</form>
 {% endblock %}
 
 {% block scripts %}
 <script>
-  const socket = io();
-  const room = "{{ room }}";
-  const nickname = "{{ user.nickname }}";
+const socket = io();
+const room = "{{ room }}";
+const user = "{{ user.nickname }}";
 
-  // 방 입장
-  socket.emit("join", {room: room, user: nickname});
+socket.emit("join", {room: room, user: user});
 
-  // 메시지 수신
-  socket.on("receive_message", function(data){
-    const box = $("#chat-box");
-    const msg = `<div class="chat-message"><span class="user">${data.user}</span>: ${data.msg} <span class="time">[${data.time}]</span></div>`;
-    box.append(msg);
-    box.scrollTop(box[0].scrollHeight);
-  });
+// 메시지 수신
+socket.on("receive_message", data => {
+    const box = document.getElementById("chat-box");
+    const div = document.createElement("div");
+    div.classList.add("chat-message");
+    div.innerHTML = `<strong>${data.user}:</strong> ${data.msg} <small class="text-muted">${data.time}</small>`;
+    box.appendChild(div);
+    box.scrollTop = box.scrollHeight;
+});
 
-  // 메시지 전송
-  $("#chat-form").submit(function(e){
+// 메시지 전송
+document.getElementById("chat-form").addEventListener("submit", e => {
     e.preventDefault();
-    const msg = $("#message").val().trim();
+    const input = document.getElementById("chat-input");
+    const msg = input.value.trim();
     if (!msg) return;
-    socket.emit("send_message", {room: room, user: nickname, msg: msg});
-    $("#message").val("");
-  });
+    socket.emit("send_message", {room: room, msg: msg, user: user});
+    input.value = "";
+});
 
-  // 방 나가기
-  window.addEventListener("beforeunload", function(){
-    socket.emit("leave", {room: room, user: nickname});
-  });
+// 방 나가기 (페이지 떠날 때)
+window.addEventListener("beforeunload", () => {
+    socket.emit("leave", {room: room, user: user});
+});
 </script>
 {% endblock %}

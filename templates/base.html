@@ -1,77 +1,92 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8">
-  <title>{% block title %}여행 커뮤니티{% endblock %}</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-  <!-- Bootstrap -->
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-
-  <!-- Custom Style -->
-  <style>
-    body { background-color:#f8f9fa; }
-    .navbar { margin-bottom:20px; }
-    .chat-box { height:400px; overflow-y:auto; background:#fff; border:1px solid #ddd; padding:10px; }
-    .chat-message { margin:5px 0; }
-    .chat-message .user { font-weight:bold; }
-    .chat-message .time { font-size:0.8em; color:#666; margin-left:6px; }
-    .chat-input { margin-top:10px; }
-  </style>
-
-  {% block head %}{% endblock %}
+    <meta charset="UTF-8">
+    <title>{% block title %}여행 커뮤니티{% endblock %}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            padding-top: 70px;
+            background-color: #f8f9fa;
+        }
+        .navbar {
+            background-color: #0d6efd !important; /* 파란색 */
+        }
+        .navbar .nav-link, .navbar-brand {
+            color: white !important;
+            font-weight: 500;
+        }
+        .navbar .nav-link:hover {
+            color: #dbeafe !important;
+        }
+        footer {
+            margin-top: 50px;
+            padding: 20px 0;
+            background-color: #0d6efd;
+            color: white;
+            text-align: center;
+        }
+        .chat-box {
+            height: 400px;
+            overflow-y: auto;
+            border: 1px solid #dee2e6;
+            padding: 10px;
+            background: #fff;
+            border-radius: 5px;
+        }
+        .chat-message {
+            margin-bottom: 8px;
+        }
+        .chat-message strong {
+            color: #0d6efd;
+        }
+    </style>
+    {% block head %}{% endblock %}
 </head>
 <body>
-  <!-- 네비게이션 -->
-  <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-    <div class="container-fluid">
-      <a class="navbar-brand" href="{{ url_for('index') }}">여행 커뮤니티</a>
-      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-        <span class="navbar-toggler-icon"></span>
-      </button>
-      <div class="collapse navbar-collapse" id="navbarNav">
-        <ul class="navbar-nav me-auto">
-          <li class="nav-item"><a class="nav-link" href="{{ url_for('posts') }}">게시글</a></li>
-          <li class="nav-item"><a class="nav-link" href="{{ url_for('chat_rooms') }}">채팅</a></li>
-          <li class="nav-item"><a class="nav-link" href="{{ url_for('map_view') }}">지도</a></li>
-          <li class="nav-item"><a class="nav-link" href="{{ url_for('currency_page') }}">환율계산</a></li>
-        </ul>
-        <ul class="navbar-nav">
-          {% if current_user %}
-            <li class="nav-item"><span class="navbar-text">{{ current_user.nickname }}님</span></li>
-            <li class="nav-item"><a class="nav-link" href="{{ url_for('logout') }}">로그아웃</a></li>
-          {% else %}
-            <li class="nav-item"><a class="nav-link" href="{{ url_for('login') }}">로그인</a></li>
-            <li class="nav-item"><a class="nav-link" href="{{ url_for('register') }}">회원가입</a></li>
-          {% endif %}
-        </ul>
-      </div>
-    </div>
-  </nav>
-
-  <!-- Flash 메시지 -->
-  <div class="container">
-    {% with messages = get_flashed_messages() %}
-      {% if messages %}
-        <div class="alert alert-info">
-          {% for msg in messages %}
-            <div>{{ msg }}</div>
-          {% endfor %}
+    <!-- 네비게이션 -->
+    <nav class="navbar navbar-expand-lg fixed-top">
+        <div class="container">
+            <a class="navbar-brand" href="{{ url_for('index') }}">✈ 여행 커뮤니티</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item"><a class="nav-link" href="{{ url_for('posts') }}">여행 후기</a></li>
+                    <li class="nav-item"><a class="nav-link" href="{{ url_for('chat_rooms') }}">채팅방</a></li>
+                    <li class="nav-item"><a class="nav-link" href="{{ url_for('map_view') }}">지도</a></li>
+                    <li class="nav-item"><a class="nav-link" href="{{ url_for('currency_page') }}">환율 계산기</a></li>
+                    {% if current_user %}
+                        <li class="nav-item"><a class="nav-link" href="{{ url_for('logout') }}">로그아웃</a></li>
+                    {% else %}
+                        <li class="nav-item"><a class="nav-link" href="{{ url_for('login') }}">로그인</a></li>
+                        <li class="nav-item"><a class="nav-link" href="{{ url_for('register') }}">회원가입</a></li>
+                    {% endif %}
+                </ul>
+            </div>
         </div>
-      {% endif %}
-    {% endwith %}
-  </div>
+    </nav>
 
-  <!-- 본문 -->
-  <div class="container">
-    {% block content %}{% endblock %}
-  </div>
+    <main class="container">
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                <div class="alert alert-info mt-2">
+                    {% for message in messages %}
+                        <div>{{ message }}</div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+        {% block content %}{% endblock %}
+    </main>
 
-  <!-- Scripts -->
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
-  <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <footer>
+        &copy; 2025 여행 커뮤니티. All rights reserved.
+    </footer>
 
-  {% block scripts %}{% endblock %}
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    {% block scripts %}{% endblock %}
 </body>
 </html>
