@@ -1,24 +1,22 @@
 {% extends "base.html" %}
-{% block title %}지도{% endblock %}
-{% block head %}
-<script>
-    // 위치 데이터를 안전하게 JS 객체로 전달
-    const locationData = {{ location|tojson }};
-    function initMap() {
-        const loc = {lat: parseFloat(locationData.lat), lng: parseFloat(locationData.lng)};
-        const map = new google.maps.Map(document.getElementById('map'), {
-            zoom: 12,
-            center: loc
-        });
-        const marker = new google.maps.Marker({position: loc, map});
-    }
-</script>
-<script async defer
-        src="https://maps.googleapis.com/maps/api/js?key=YOUR_API_KEY&callback=initMap">
-</script>
-{% endblock %}
 {% block content %}
 <h2>지도</h2>
-<div id="map" style="width:100%; height:500px;"></div>
-<button onclick="history.back()">돌아가기</button>
+<div id="map" style="width:100%;height:500px;border:1px solid #ccc;"></div>
+<br>
+<a href="{{ url_for('index') }}" class="btn">돌아가기</a>
+
+<script>
+const locationData = {{ location|tojson }};
+function initMap() {
+    const loc = {lat: parseFloat(locationData.lat), lng: parseFloat(locationData.lng)};
+    const map = new google.maps.Map(document.getElementById("map"), {
+        zoom: 12,
+        center: loc
+    });
+    new google.maps.Marker({position: loc, map: map});
+}
+</script>
+<script async defer
+src="https://maps.googleapis.com/maps/api/js?key=YOUR_API_KEY&callback=initMap">
+</script>
 {% endblock %}

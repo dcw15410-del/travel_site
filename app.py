@@ -7,7 +7,7 @@ from flask_socketio import SocketIO, emit, join_room, leave_room, disconnect
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from datetime import datetime
-import os, pytz, requests, logging
+import os, pytz, eventlet.green.requests as grequests, logging
 
 # -----------------------------
 # 기본 설정
@@ -71,8 +71,8 @@ TIMEZONE_MAP = {
     "필리핀": "Asia/Manila",
     "태국": "Asia/Bangkok"
 }
-room_users = {room: 0 for room in CHAT_ROOMS}  # 인원 관리
-user_rooms = {}  # 각 연결별 사용자가 들어간 방 추적 {sid: room}
+room_users = {room: 0 for room in CHAT_ROOMS}
+user_rooms = {}
 
 # -----------------------------
 # 공통 템플릿 변수
@@ -247,66 +247,16 @@ def chat(room):
         flash("존재하지 않는 채팅방입니다.")
         return redirect(url_for('chat_rooms'))
     user = User.query.get(session['user_id'])
-    # 이전 메시지 불러오기
     messages = Message.query.filter_by(room=room).order_by(Message.created_at.asc()).all()
     return render_template('chat.html', messages=messages, user=user, room=room)
 
 # -----------------------------
-# 지도 라우트
+# 지도 라우트 (Google Maps Eventlet-safe)
 # -----------------------------
 @app.route('/map')
 def map_view():
-    # 기본 위치: 인천공항
-    default_location = {'lat': 37.4602, 'lng': 126.4407}
+    default_location = {'lat': 37.4602, 'lng': 126.4407}  # 인천공항
     return render_template("map.html", location=default_location)
-
-# -----------------------------
-# 환율 계산 API & 페이지
-# -----------------------------
-@app.route('/convert_currency')
-def convert_currency_api():
-    from_cur = request.args.get("from")
-    to_cur = request.args.get("to")
-    try:
-        amount = float(request.args.get('amount', '1') or '1')
-    except Exception:
-        amount = 1.0
-
-    currencies = {
-        "USD":"미국 달러","KRW":"대한민국 원","JPY":"일본 엔",
-        "EUR":"유로","CNY":"중국 위안","THB":"태국 바트",
-        "VND":"베트남 동","PHP":"필리핀 페소"
-    }
-
-    if not from_cur or not to_cur:
-        return jsonify({"error": "통화 파라미터가 필요합니다."}), 400
-
-    if from_cur not in currencies or to_cur not in currencies:
-        return jsonify({"error": "지원하지 않는 통화입니다."}), 400
-
-    try:
-        url = f"https://api.exchangerate.host/convert?from={from_cur}&to={to_cur}&amount={amount}"
-        resp = requests.get(url, timeout=10)
-        data = resp.json()
-
-        if data.get("result") is not None:
-            result = round(data.get("result", 4), 4)
-            rate = round(data.get("info", {}).get("rate", 0), 6)
-            return jsonify({"result": result, "rate": rate})
-
-        return jsonify({"error": "환율 계산 실패"}), 500
-
-    except Exception as e:
-        return jsonify({"error": f"서버 오류: {str(e)}"}), 500
-
-@app.route('/currency')
-def currency_page():
-    currencies = {
-        "USD":"미국 달러","KRW":"대한민국 원","JPY":"일본 엔",
-        "EUR":"유로","CNY":"중국 위안","THB":"태국 바트",
-        "VND":"베트남 동","PHP":"필리핀 페소"
-    }
-    return render_template("currency.html", currencies=currencies)
 
 # -----------------------------
 # SocketIO 이벤트
@@ -318,7 +268,6 @@ def on_join(data):
     join_room(room)
     room_users[room] = room_users.get(room,0) + 1
     user_rooms[request.sid] = room
-
     ts = datetime.now().strftime("%H:%M:%S")
     emit('receive_message', {'user':'시스템','msg':f'{nickname}님이 입장했습니다.','time':ts}, room=room)
     socketio.emit('room_users_update', room_users, broadcast=True)
