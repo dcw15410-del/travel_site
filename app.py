@@ -72,12 +72,10 @@ TIMEZONE_MAP = {
     "태국": "Asia/Bangkok"
 }
 
-# 실시간 접속자 관리
 room_members = {room: set() for room in CHAT_ROOMS}
 sid_map = {}
 
 def build_room_state_payload():
-    """현재 접속자 수, 닉네임 목록"""
     counts = {room: len(room_members.get(room, set())) for room in CHAT_ROOMS}
     lists = {}
     for room in CHAT_ROOMS:
@@ -98,8 +96,7 @@ def inject_user_and_subscription_and_times():
     if "user_id" in session:
         try:
             user = User.query.get(session["user_id"])
-            if user:
-                subscribed = Subscriber.query.filter_by(email=user.email).first() is not None
+            subscribed = bool(user and Subscriber.query.filter_by(email=user.email).first())
         except Exception:
             user = None
 
@@ -116,12 +113,12 @@ def inject_user_and_subscription_and_times():
         is_subscribed=subscribed,
         chat_rooms=CHAT_ROOMS,
         room_times=room_times,
-        room_users={r: len(room_members[r]) for r in CHAT_ROOMS},
+        room_users={r: len(room_members.get(r,set())) for r in CHAT_ROOMS},
         timezone_map=TIMEZONE_MAP
     )
 
 # -----------------------------
-# 라우트 (메인/게시글/회원/구독)
+# 라우트
 # -----------------------------
 @app.route('/')
 def index():
@@ -155,13 +152,22 @@ def new_post():
         filename = None
         if file and file.filename:
             filename = secure_filename(file.filename)
+            ext = os.path.splitext(filename)[1].lower()
+            if ext not in ['.png','.jpg','.jpeg','.gif']:
+                flash("허용되지 않는 파일 형식입니다.")
+                return redirect(url_for('new_post'))
             file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
 
         excerpt = (content[:280] + '...') if len(content) > 280 else content
         post = Post(title=title, content=content, excerpt=excerpt,
                     image=filename, user_id=session['user_id'])
-        db.session.add(post)
-        db.session.commit()
+        try:
+            db.session.add(post)
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+            flash("게시글 등록 중 오류 발생")
+            return redirect(url_for('new_post'))
         flash("새 글이 등록되었습니다.")
         return redirect(url_for('posts'))
     return render_template("new_post.html")
@@ -180,9 +186,14 @@ def register():
             flash("이미 존재하는 계정입니다.")
             return redirect(url_for('register'))
         pw_hash = generate_password_hash(password)
-        user = User(username=username, nickname=nickname, email=email, password_hash=pw_hash)
-        db.session.add(user)
-        db.session.commit()
+        try:
+            user = User(username=username, nickname=nickname, email=email, password_hash=pw_hash)
+            db.session.add(user)
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+            flash("회원가입 중 오류 발생")
+            return redirect(url_for('register'))
         flash("회원가입 완료. 로그인 해주세요.")
         return redirect(url_for('login'))
     return render_template("register.html")
@@ -221,10 +232,14 @@ def subscribe():
     if Subscriber.query.filter_by(email=email).first():
         flash("이미 구독 중입니다.")
     else:
-        sub = Subscriber(email=email)
-        db.session.add(sub)
-        db.session.commit()
-        flash("구독 완료.")
+        try:
+            sub = Subscriber(email=email)
+            db.session.add(sub)
+            db.session.commit()
+            flash("구독 완료.")
+        except Exception:
+            db.session.rollback()
+            flash("구독 중 오류 발생")
     return redirect(request.referrer or url_for('index'))
 
 # -----------------------------
@@ -289,12 +304,13 @@ def on_join(data):
     room = data.get('room', '한국')
     nickname = data.get('user') or '익명'
     sid = request.sid
-    prev_info = sid_map.get(sid)
 
+    prev_info = sid_map.get(sid)
     if prev_info:
         prev_room = prev_info.get('room')
         if prev_room and sid in room_members.get(prev_room, set()):
             room_members[prev_room].discard(sid)
+
     join_room(room)
     room_members.setdefault(room, set()).add(sid)
     sid_map[sid] = {'nick': nickname, 'room': room}
