@@ -3,7 +3,7 @@ eventlet.monkey_patch()
 
 from flask import Flask, render_template, request, redirect, session, flash, url_for, jsonify
 from flask_sqlalchemy import SQLAlchemy
-from flask_socketio import SocketIO, emit, join_room, leave_room, disconnect
+from flask_socketio import SocketIO, emit, join_room, leave_room
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from datetime import datetime
@@ -71,14 +71,16 @@ TIMEZONE_MAP = {
     "필리핀": "Asia/Manila",
     "태국": "Asia/Bangkok"
 }
-room_users = {room: 0 for room in CHAT_ROOMS}  # 인원 관리
-user_rooms = {}  # 각 연결별 사용자가 들어간 방 추적 {sid: room}
+
+room_users = {room: 0 for room in CHAT_ROOMS}  # 인원수
+user_rooms = {}  # {sid: room}
+room_user_list = {room: [] for room in CHAT_ROOMS}  # 각 방에 접속 중인 유저 닉네임
 
 # -----------------------------
 # 공통 템플릿 변수
 # -----------------------------
 @app.context_processor
-def inject_user_and_subscription_and_times():
+def inject_user_and_times():
     user, subscribed = None, False
     if "user_id" in session:
         user = User.query.get(session["user_id"])
@@ -99,11 +101,11 @@ def inject_user_and_subscription_and_times():
         chat_rooms=CHAT_ROOMS,
         room_times=room_times,
         room_users=room_users,
-        timezone_map=TIMEZONE_MAP
+        room_user_list=room_user_list
     )
 
 # -----------------------------
-# 메인 / 글 관련 라우트
+# 메인/게시판 라우트
 # -----------------------------
 @app.route('/')
 def index():
@@ -123,7 +125,7 @@ def post_detail(post_id):
 @app.route('/post/new', methods=['GET','POST'])
 def new_post():
     if "user_id" not in session:
-        flash("글 작성은 로그인 후 가능합니다.")
+        flash("로그인이 필요합니다.")
         return redirect(url_for('login'))
     if request.method == 'POST':
         title = request.form.get('title','').strip()
@@ -144,28 +146,26 @@ def new_post():
                     image=filename, user_id=session['user_id'])
         db.session.add(post)
         db.session.commit()
-        flash("새 글이 등록되었습니다.")
+        flash("새 글 등록 완료.")
         return redirect(url_for('posts'))
     return render_template("new_post.html")
 
 @app.route('/post/<int:post_id>/delete', methods=['POST'])
 def delete_post(post_id):
     if "user_id" not in session:
-        flash("로그인 후 삭제 가능합니다.")
+        flash("로그인이 필요합니다.")
         return redirect(url_for('login'))
-
     post = Post.query.get_or_404(post_id)
     if post.user_id != session["user_id"]:
-        flash("본인 글만 삭제할 수 있습니다.")
+        flash("본인 글만 삭제 가능")
         return redirect(url_for('post_detail', post_id=post.id))
-
     db.session.delete(post)
     db.session.commit()
-    flash("게시글이 삭제되었습니다.")
+    flash("삭제 완료")
     return redirect(url_for('posts'))
 
 # -----------------------------
-# 회원가입 / 로그인 / 로그아웃
+# 회원가입/로그인
 # -----------------------------
 @app.route('/register', methods=['GET','POST'])
 def register():
@@ -174,17 +174,20 @@ def register():
         nickname = request.form.get('nickname','').strip()
         email = request.form.get('email','').strip().lower()
         password = request.form.get('password','').strip()
+
         if not all([username, nickname, email, password]):
-            flash("모든 항목을 입력해주세요.")
+            flash("모든 항목 입력 필요")
             return redirect(url_for('register'))
+
         if User.query.filter((User.username==username)|(User.email==email)|(User.nickname==nickname)).first():
-            flash("이미 존재하는 아이디, 이메일 또는 닉네임입니다.")
+            flash("이미 존재하는 계정/닉네임/이메일")
             return redirect(url_for('register'))
+
         pw_hash = generate_password_hash(password)
         user = User(username=username, nickname=nickname, email=email, password_hash=pw_hash)
         db.session.add(user)
         db.session.commit()
-        flash("회원가입 완료. 로그인 해주세요.")
+        flash("회원가입 성공. 로그인 하세요.")
         return redirect(url_for('login'))
     return render_template("register.html")
 
@@ -198,14 +201,14 @@ def login():
             session['user_id'] = user.id
             flash(f"{user.nickname}님 환영합니다.")
             return redirect(url_for('index'))
-        flash("로그인 실패: 아이디 또는 비밀번호 확인")
+        flash("로그인 실패")
         return redirect(url_for('login'))
     return render_template("login.html")
 
 @app.route('/logout')
 def logout():
     session.pop('user_id', None)
-    flash("로그아웃되었습니다.")
+    flash("로그아웃 완료")
     return redirect(url_for('index'))
 
 # -----------------------------
@@ -219,20 +222,21 @@ def subscribe():
         email = user.email if user else None
     else:
         email = request.form.get('email','').strip().lower()
+
     if not email:
-        flash("이메일이 필요합니다.")
+        flash("이메일 필요")
         return redirect(url_for('index'))
     if Subscriber.query.filter_by(email=email).first():
-        flash("이미 구독 중입니다.")
+        flash("이미 구독 중")
     else:
         sub = Subscriber(email=email)
         db.session.add(sub)
         db.session.commit()
-        flash("구독이 완료되었습니다.")
+        flash("구독 완료")
     return redirect(request.referrer or url_for('index'))
 
 # -----------------------------
-# 채팅 라우트
+# 채팅
 # -----------------------------
 @app.route('/chat')
 def chat_rooms():
@@ -241,23 +245,23 @@ def chat_rooms():
 @app.route('/chat/<room>')
 def chat(room):
     if "user_id" not in session:
-        flash("채팅은 로그인 후 이용 가능합니다.")
+        flash("로그인 후 이용 가능")
         return redirect(url_for('login'))
     if room not in CHAT_ROOMS:
-        flash("존재하지 않는 채팅방입니다.")
+        flash("존재하지 않는 채팅방")
         return redirect(url_for('chat_rooms'))
     user = User.query.get(session['user_id'])
     return render_template('chat.html', messages=[], user=user, room=room)
 
 # -----------------------------
-# 지도 라우트
+# 지도
 # -----------------------------
 @app.route('/map')
 def map_view():
     return render_template("map.html")
 
 # -----------------------------
-# 환율 계산 API
+# 환율 계산
 # -----------------------------
 @app.route('/convert_currency')
 def convert_currency_api():
@@ -275,37 +279,22 @@ def convert_currency_api():
     }
 
     if not from_cur or not to_cur:
-        return jsonify({"error": "통화 파라미터가 필요합니다."}), 400
-
+        return jsonify({"error": "통화 파라미터 필요"}), 400
     if from_cur not in currencies or to_cur not in currencies:
-        return jsonify({"error": "지원하지 않는 통화입니다."}), 400
+        return jsonify({"error": "지원하지 않는 통화"}), 400
 
     try:
         url = f"https://api.exchangerate.host/convert?from={from_cur}&to={to_cur}&amount={amount}"
         resp = requests.get(url, timeout=10)
         data = resp.json()
-
         if data.get("result") is not None:
             result = round(data.get("result", 4), 4)
             rate = round(data.get("info", {}).get("rate", 0), 6)
             return jsonify({"result": result, "rate": rate})
-
-        backup_url = f"https://open.er-api.com/v6/latest/{from_cur}"
-        r2 = requests.get(backup_url, timeout=10)
-        data2 = r2.json()
-
-        if data2.get("result") == "success" and to_cur in data2.get("rates", {}):
-            rate = data2["rates"][to_cur]
-            return jsonify({"result": round(amount * rate, 4), "rate": round(rate, 6)})
-
-        return jsonify({"error": "환율 계산 실패"}), 500
-
+        return jsonify({"error": "환율 API 실패"}), 500
     except Exception as e:
         return jsonify({"error": f"서버 오류: {str(e)}"}), 500
 
-# -----------------------------
-# 환율 계산 페이지
-# -----------------------------
 @app.route('/currency')
 def currency_page():
     currencies = {
@@ -324,15 +313,16 @@ def on_join(data):
     nickname = data.get('user','익명')
     join_room(room)
 
-    # 인원 증가
+    # 인원 및 유저 추가
     room_users[room] = max(0, room_users.get(room, 0)) + 1
-    user_rooms[request.sid] = room  # 연결 추적
+    user_rooms[request.sid] = room
+    if nickname not in room_user_list[room]:
+        room_user_list[room].append(nickname)
 
     ts = datetime.now().strftime("%H:%M:%S")
-    emit('receive_message', {'user':'시스템','msg':f'{nickname}님이 입장했습니다.','time':ts}, room=room)
+    emit('receive_message', {'user':'시스템','msg':f'{nickname}님 입장','time':ts}, room=room)
 
-    # 입장 즉시 인원수 전달
-    socketio.emit('room_users_update', room_users, broadcast=True)
+    socketio.emit('room_users_update', {"counts": room_users, "lists": room_user_list}, broadcast=True)
 
 @socketio.on('leave')
 def on_leave(data):
@@ -342,26 +332,29 @@ def on_leave(data):
 
     if room in room_users and room_users[room] > 0:
         room_users[room] -= 1
+    if nickname in room_user_list[room]:
+        room_user_list[room].remove(nickname)
 
     user_rooms.pop(request.sid, None)
 
     ts = datetime.now().strftime("%H:%M:%S")
-    emit('receive_message', {'user':'시스템','msg':f'{nickname}님이 퇴장했습니다.', 'time':ts}, room=room)
-    socketio.emit('room_users_update', room_users, broadcast=True)
+    emit('receive_message', {'user':'시스템','msg':f'{nickname}님 퇴장','time':ts}, room=room)
+
+    socketio.emit('room_users_update', {"counts": room_users, "lists": room_user_list}, broadcast=True)
 
 @socketio.on('disconnect')
 def on_disconnect():
-    """브라우저 닫기 / 새로고침 등 비정상 종료 시 인원수 반영"""
     room = user_rooms.pop(request.sid, None)
-    if room and room in room_users and room_users[room] > 0:
-        room_users[room] -= 1
-        socketio.emit('room_users_update', room_users, broadcast=True)
+    if room:
+        room_users[room] = max(0, room_users.get(room, 0)) - 1
+        # 유저 닉네임 제거는 세션 기반 구현 필요 (단순화)
+        socketio.emit('room_users_update', {"counts": room_users, "lists": room_user_list}, broadcast=True)
 
 @socketio.on('send_message')
 def handle_send_message(data):
     room = data.get('room','한국')
     text = data.get('msg','').strip()
-    nickname = data.get('user') or (session.get('user_id') and User.query.get(session['user_id']).nickname) or "익명"
+    nickname = data.get('user') or "익명"
     if not text:
         return
     ts = datetime.utcnow()
