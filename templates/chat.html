@@ -1,138 +1,63 @@
 {% extends "base.html" %}
-{% block title %}{{ room }} 채팅{% endblock %}
-
+{% block title %}{{ room }} 채팅방{% endblock %}
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-2">
-  <h3>{{ room }} 채팅방</h3>
-  <div>
-    <a href="{{ url_for('chat_rooms') }}" id="back-to-list" class="btn btn-outline-secondary">목록으로</a>
-  </div>
-</div>
-
-<div class="row">
-  <div class="col-lg-8">
-    <div id="chat-box" class="chat-box mb-3"></div>
-
-    <form id="chat-form" class="d-flex">
-      <input type="text" id="msg" class="form-control me-2" placeholder="메시지를 입력하세요" autocomplete="off">
-      <button class="btn btn-primary" type="submit">전송</button>
-    </form>
-  </div>
-
-  <div class="col-lg-4">
-    <div class="card">
-      <div class="card-body">
-        <h5>현재 접속자: <span id="room-count">{{ room_users[room] }}</span> 명</h5>
-        <ul id="user-list" class="list-group mb-3">
-          <!-- 서버 사이드로 넘길 수 있으면 렌더링, 아니면 소켓으로 채움 -->
-          {% set list = [] %}
-          {% for sid in [] %}
-          <li class="list-group-item">익명</li>
-          {% endfor %}
-        </ul>
-        <p>현지 시각: <strong id="local-time">{{ room_times[room] }}</strong></p>
-      </div>
-    </div>
-  </div>
-</div>
+<h2 class="mb-3">{{ room }} 채팅방</h2>
+<p>현재 인원: <span id="user-count">0</span>명</p>
+<p>현지 시각: <span id="local-time">--:--:--</span></p>
+<div id="chat-box" class="border rounded p-3 mb-3 bg-white" style="height:400px; overflow-y:scroll;"></div>
+<form id="chat-form" class="d-flex">
+  <input id="message" class="form-control me-2" autocomplete="off" placeholder="메시지를 입력하세요">
+  <button class="btn btn-primary">전송</button>
+</form>
+<a href="{{ url_for('chat_rooms') }}" class="btn btn-secondary mt-3">목록으로 돌아가기</a>
 {% endblock %}
 
 {% block extra_script %}
+<script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
 <script>
-  const socket = io();
-  const ROOM = "{{ room }}";
-  const NICK = "{{ user.nickname|e }}";
-  const TZ = "{{ timezone_map[room] }}";
+const room = "{{ room }}";
+const user = "{{ user.nickname }}";
+const socket = io();
 
-  const chatBox = document.getElementById('chat-box');
-  const userListEl = document.getElementById('user-list');
-  const roomCountEl = document.getElementById('room-count');
-  const localTimeEl = document.getElementById('local-time');
+// 입장
+socket.emit("join", {room: room, user: user});
 
-  // helper: append message
-  function appendMessage(data, opts = {}) {
-    const div = document.createElement('div');
-    div.className = opts.system ? 'msg-system' : 'msg-user';
-    div.innerHTML = `<small class="text-muted">[${data.time}]</small> <strong>${data.user}</strong>: ${data.msg}`;
-    chatBox.appendChild(div);
-    chatBox.scrollTop = chatBox.scrollHeight;
+// 메시지 전송
+document.getElementById("chat-form").onsubmit = e => {
+  e.preventDefault();
+  const msg = document.getElementById("message").value.trim();
+  if (msg) {
+    socket.emit("send_message", {room: room, msg: msg, user: user});
+    document.getElementById("message").value = "";
   }
+};
 
-  // receive messages
-  socket.on('receive_message', function(data) {
-    appendMessage(data, { system: data.user === '시스템' });
-  });
+// 메시지 수신
+socket.on("receive_message", data => {
+  const box = document.getElementById("chat-box");
+  const div = document.createElement("div");
+  div.textContent = `[${data.time}] ${data.user}: ${data.msg}`;
+  box.appendChild(div);
+  box.scrollTop = box.scrollHeight;
+});
 
-  // room users update
-  socket.on('room_users_update', function(payload) {
-    if (!payload) return;
-    try {
-      const counts = payload.counts || {};
-      const lists = payload.lists || {};
-      // update count
-      if (counts[ROOM] !== undefined) {
-        roomCountEl.textContent = counts[ROOM];
-      }
-      // update user list
-      if (lists[ROOM] !== undefined) {
-        userListEl.innerHTML = '';
-        lists[ROOM].forEach(nick => {
-          const li = document.createElement('li');
-          li.className = 'list-group-item';
-          li.textContent = nick;
-          userListEl.appendChild(li);
-        });
-      }
-    } catch (e) {
-      console.error(e);
-    }
-  });
+// 인원수 업데이트
+socket.on("room_users_update", data => {
+  const count = data.counts[room];
+  document.getElementById("user-count").textContent = count;
+});
 
-  // join on connect (immediately)
-  socket.on('connect', () => {
-    socket.emit('join', { room: ROOM, user: NICK });
-  });
+// 현지 시각 매초 업데이트
+function updateTime() {
+  const now = new Date();
+  document.getElementById("local-time").textContent =
+    now.toLocaleTimeString("ko-KR", {hour12:false});
+}
+setInterval(updateTime, 1000);
 
-  // send message form
-  document.getElementById('chat-form').addEventListener('submit', function(e) {
-    e.preventDefault();
-    const msgInput = document.getElementById('msg');
-    const text = msgInput.value.trim();
-    if (!text) return;
-    socket.emit('send_message', { room: ROOM, msg: text, user: NICK });
-    msgInput.value = '';
-  });
-
-  // safe leave when clicking '목록으로'
-  document.getElementById('back-to-list').addEventListener('click', function(e) {
-    e.preventDefault();
-    // emit leave, then navigate shortly after
-    socket.emit('leave', { room: ROOM, user: NICK });
-    setTimeout(() => {
-      window.location.href = this.href;
-    }, 120); // 120ms 여유
-  });
-
-  // beforeunload: best-effort leave (may not always arrive)
-  window.addEventListener('beforeunload', function () {
-    try {
-      socket.emit('leave', { room: ROOM, user: NICK });
-    } catch (e) {}
-  });
-
-  // local time update using Intl with timezone
-  function updateLocalTime() {
-    if (!localTimeEl) return;
-    try {
-      const now = new Date();
-      const s = now.toLocaleTimeString('ko-KR', { hour12: false, timeZone: TZ });
-      localTimeEl.textContent = s;
-    } catch (e) {
-      // fallback: show client time
-      localTimeEl.textContent = new Date().toLocaleTimeString('ko-KR', { hour12: false });
-    }
-  }
-  setInterval(updateLocalTime, 1000);
-  updateLocalTime();
+// 나가기 처리
+window.addEventListener("beforeunload", () => {
+  socket.emit("leave", {room: room, user: user});
+});
 </script>
 {% endblock %}

@@ -1,79 +1,44 @@
 {% extends "base.html" %}
 {% block title %}채팅방 목록{% endblock %}
-
 {% block content %}
-<h2>채팅방 목록</h2>
-
+<h2 class="mb-4">채팅방 목록</h2>
 <div class="row">
   {% for room in chat_rooms %}
-  <div class="col-md-4">
-    <div class="card mb-3">
-      <div class="card-body">
-        <h5 class="card-title">{{ room }}</h5>
-        <p class="card-text">
-          인원: <strong id="count-{{ room }}">{{ room_users[room] }}</strong> 명<br>
-          현지시각: <strong id="time-{{ room }}">{{ room_times[room] }}</strong>
-        </p>
-        <a href="{{ url_for('chat', room=room) }}" class="btn btn-primary enter-link" data-room="{{ room }}">입장하기</a>
+    <div class="col-md-4 mb-3">
+      <div class="card shadow-sm">
+        <div class="card-body">
+          <h5 class="card-title">{{ room }}</h5>
+          <p class="card-text">
+            현재 인원: <span id="count-{{ room }}">{{ room_users[room] }}</span>명<br>
+            현지 시각: <span id="time-{{ room }}">{{ room_times[room] }}</span>
+          </p>
+          <a href="{{ url_for('chat', room=room) }}" class="btn btn-primary">입장하기</a>
+        </div>
       </div>
     </div>
-  </div>
   {% endfor %}
 </div>
 {% endblock %}
 
 {% block extra_script %}
+<script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
 <script>
-  // timezone map from server
-  const TIMEZONE_MAP = {{ timezone_map | tojson }};
-  const ROOM_LIST = {{ chat_rooms | tojson }};
-  // initial counts object (server provided)
-  let counts = {};
-  {% for r in chat_rooms %}
-    counts["{{ r }}"] = {{ room_users[r] }};
-  {% endfor %}
-
-  // 소켓 연결해서 실시간 인원/목록 업데이트 수신
-  const socket = io();
-
-  socket.on('connect', () => {
-    // 요청 시 서버가 브로드캐스트 해주면 업데이트 됨
-    // optionally ask server to send current state (server broadcasts on join/leave)
-  });
-
-  socket.on('room_users_update', (payload) => {
-    try {
-      if (payload && payload.counts) {
-        for (const r in payload.counts) {
-          const el = document.getElementById('count-' + r);
-          if (el) el.textContent = payload.counts[r];
-        }
-      }
-    } catch (e) {
-      console.error(e);
-    }
-  });
-
-  // 현지 시각을 타임존으로 표시 (매초 갱신)
-  function updateLocalTimes() {
-    for (const room of ROOM_LIST) {
-      const tz = TIMEZONE_MAP[room];
-      const el = document.getElementById('time-' + room);
-      if (!el || !tz) continue;
-      try {
-        const now = new Date();
-        // toLocaleTimeString with timeZone
-        const s = now.toLocaleTimeString('ko-KR', { hour12: false, timeZone: tz });
-        el.textContent = s;
-      } catch (e) {
-        // 브라우저가 지원하지 않으면 서버에서 내려준 문자열 유지
-      }
-    }
+const socket = io();
+socket.on("room_users_update", data => {
+  for (const [room, count] of Object.entries(data.counts)) {
+    const el = document.getElementById("count-" + room);
+    if (el) el.textContent = count;
   }
-  setInterval(updateLocalTimes, 1000);
-  updateLocalTimes();
+});
 
-  // '입장하기'를 클릭할 때 페이지 이동 전에 leave/join 문제없이 처리되도록 평범한 링크 유지.
-  // (실제로 채팅방 진입 시 socket join은 해당 채팅 페이지에서 수행됩니다.)
+// 현지 시각 클라이언트에서 매초 업데이트
+function updateClocks() {
+  const now = new Date();
+  {% for room in chat_rooms %}
+    document.getElementById("time-{{ room }}").textContent =
+      now.toLocaleTimeString("ko-KR", { hour12:false });
+  {% endfor %}
+}
+setInterval(updateClocks, 1000);
 </script>
 {% endblock %}
