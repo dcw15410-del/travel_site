@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "change_this_secret_for_production")
 
-# DB 파일 이름: travel_site.db (요청하신 이름)
+# DB 파일 이름: travel_site.db (프로젝트 루트에 생성)
 basedir = os.path.abspath(os.path.dirname(__file__))
 db_path = os.path.join(basedir, 'travel_site.db')
 app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{db_path}"
@@ -297,7 +297,7 @@ def chat(room):
         flash("존재하지 않는 채팅방입니다.")
         return redirect(url_for('chat_rooms'))
     user = User.query.get(session['user_id'])
-    # 최근 메시지 (예: 마지막 50개)
+    # 최근 메시지 (예: 마지막 200개)
     messages = Message.query.filter_by(room=room).order_by(Message.created_at.asc()).limit(200).all()
     return render_template('chat.html', messages=messages, user=user, room=room)
 

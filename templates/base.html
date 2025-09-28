@@ -2,9 +2,23 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-    <meta charset="UTF-8">
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>{% block title %}여행 사이트{% endblock %}</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+
+    <!-- (선택) 기존 CSS를 그대로 사용하려면 여기에 링크하세요 -->
+    <!-- <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}"> -->
+
+    <style>
+        /* 최소한의 기본 스타일 (원래 스타일 덮어쓰지 않도록 간단하게) */
+        body { font-family: Arial, Helvetica, sans-serif; margin: 0; padding: 0; }
+        header { background:#2d7be4; color:#fff; padding:10px 16px; }
+        nav a { color:#fff; margin-right:12px; text-decoration:none;}
+        main { padding:16px; }
+        .flash { background:#fffae6; padding:8px; margin-bottom:8px; border-radius:4px; }
+        .small-muted { color: #666; font-size:0.9em; }
+    </style>
+    {% block head %}{% endblock %}
 </head>
 <body>
     <header>
@@ -14,10 +28,9 @@
             <a href="{{ url_for('map_view') }}">지도</a>
             <a href="{{ url_for('currency_page') }}">환율 계산기</a>
             <a href="{{ url_for('chat_rooms') }}">채팅</a>
-
             {% if current_user %}
-                <span>안녕하세요, {{ current_user.nickname }}님</span>
-                <a href="{{ url_for('logout') }}">로그아웃</a>
+                <span style="margin-left:12px;">안녕하세요, {{ current_user.nickname }}님</span>
+                <a href="{{ url_for('logout') }}" style="margin-left:8px;">로그아웃</a>
             {% else %}
                 <a href="{{ url_for('login') }}">로그인</a>
                 <a href="{{ url_for('register') }}">회원가입</a>
@@ -28,15 +41,19 @@
     <main>
         {% with messages = get_flashed_messages() %}
             {% if messages %}
-                <ul class="flashes">
+                <div class="flash">
+                    <ul style="margin:0; padding-left:18px;">
                     {% for msg in messages %}
                         <li>{{ msg }}</li>
                     {% endfor %}
-                </ul>
+                    </ul>
+                </div>
             {% endif %}
         {% endwith %}
 
         {% block content %}{% endblock %}
     </main>
+
+    {% block scripts %}{% endblock %}
 </body>
 </html>
