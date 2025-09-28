@@ -1,61 +1,25 @@
-<!-- templates/chat_rooms.html -->
-{% extends "base.html" %}
-{% block title %}채팅방 목록{% endblock %}
-
-{% block content %}
-<h2>채팅방</h2>
-
-<p class="small-muted">채팅은 로그인 후 이용 가능합니다.</p>
-
-<ul>
-    {% for room in chat_rooms %}
-        <li>
-            <a href="{{ url_for('chat', room=room) }}">{{ room }}</a>
-            — 현재 접속: {{ room_users.get(room, 0) }}
-            {% if room_user_list and room_user_list.get(room) %}
-                <div class="small-muted">접속자: {{ room_user_list[room] | join(', ') }}</div>
-            {% endif %}
-        </li>
-    {% endfor %}
-</ul>
-
-<hr>
-<div>
-    <strong>실시간 방 상태</strong>
-    <div id="rooms_state">
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>채팅방 목록</title>
+    <style>
+        body { font-family: Arial, sans-serif; }
+        .room { border:1px solid #ccc; margin:5px; padding:10px; }
+    </style>
+</head>
+<body>
+    <h2>채팅방 목록</h2>
+    <ul>
         {% for room in chat_rooms %}
-            <div id="room_state_{{ loop.index0 }}">
-                {{ room }}: <span class="count">{{ room_users.get(room, 0) }}</span>
-            </div>
+        <li class="room">
+            <a href="{{ url_for('chat', room=room) }}">{{ room }} 채팅방</a>
+            <br>
+            접속자 수: {{ room_users[room] }}
+            <br>
+            현재 접속자: {{ room_user_list[room] | join(", ") }}
+        </li>
         {% endfor %}
-    </div>
-</div>
-{% endblock %}
-
-{% block scripts %}
-<script src="https://cdn.socket.io/4.3.2/socket.io.min.js"></script>
-<script>
-    const socket = io();
-    // 업데이트 수신 (전체 방 인원/목록)
-    socket.on('room_users_update', function(payload) {
-        try {
-            const counts = payload.counts || {};
-            const lists = payload.lists || {};
-            // 업데이트 화면에 반영
-            // 각 room 요소를 찾아 변경
-            for (const r in counts) {
-                // find by text — safer to refresh page elements by matching room names
-                // simple approach: find any element that contains room name and replace count nearby
-                const nodes = document.querySelectorAll('#rooms_state div');
-                nodes.forEach((n) => {
-                    if (n.textContent.trim().startsWith(r)) {
-                        n.querySelector('.count').textContent = counts[r];
-                    }
-                });
-            }
-            // (선택) 접속자 목록 갱신 — 간단 구현: 로그로 출력
-            console.log('room lists update', lists);
-        } catch (e) { console.error(e); }
-    });
-</script>
-{% endblock %}
+    </ul>
+</body>
+</html>

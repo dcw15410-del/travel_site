@@ -336,7 +336,8 @@ def convert_currency_api():
             rate = round(data.get("info", {}).get("rate", 0), 6)
             return jsonify({"result": result, "rate": rate})
 
-        backup_url = f"https://open.er-api.com/v6/latest/{from_cur}"`
+        # 백틱(`) 삭제 → 문법 오류 수정됨
+        backup_url = f"https://open.er-api.com/v6/latest/{from_cur}"
         r2 = requests.get(backup_url, timeout=8)
         data2 = r2.json()
 
@@ -390,55 +391,3 @@ def on_leave(data):
     sid = request.sid
 
     if sid in room_members.get(room, set()):
-        room_members[room].discard(sid)
-    sid_map.pop(sid, None)
-
-    leave_room(room)
-    ts = datetime.now().strftime("%H:%M:%S")
-    emit('receive_message', {'user':'시스템','msg':f'{nickname}님이 퇴장했습니다.', 'time':ts}, room=room)
-    socketio.emit('room_users_update', build_room_state_payload(), broadcast=True)
-
-@socketio.on('disconnect')
-def on_disconnect():
-    sid = request.sid
-    info = sid_map.pop(sid, None)
-    if info:
-        room = info.get('room')
-        if room and sid in room_members.get(room, set()):
-            room_members[room].discard(sid)
-            socketio.emit('room_users_update', build_room_state_payload(), broadcast=True)
-
-@socketio.on('send_message')
-def handle_send_message(data):
-    room = data.get('room','한국')
-    text = data.get('msg','').strip()
-    nickname = data.get('user') or (session.get('user_id') and User.query.get(session['user_id']).nickname) or "익명"
-    if not text:
-        return
-    ts = datetime.utcnow()
-    try:
-        m = Message(room=room, nickname=nickname, text=text, created_at=ts)
-        db.session.add(m)
-        db.session.commit()
-    except Exception:
-        db.session.rollback()
-        logger.exception("메시지 DB 저장 실패")
-    emit('receive_message', {'user': nickname, 'msg': text, 'time': ts.strftime("%H:%M:%S")}, room=room)
-
-# -----------------------------
-# 정적 파일
-# -----------------------------
-@app.route('/uploads/<filename>')
-def uploaded_file(filename):
-    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
-
-# -----------------------------
-# 실행
-# -----------------------------
-with app.app_context():
-    db.create_all()
-    logger.info(f"DB ensured at {db_path}")
-
-if __name__ == '__main__':
-    debug_mode = os.environ.get('FLASK_DEBUG', '0') == '1'
-    socketio.run(app, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=debug_mode)

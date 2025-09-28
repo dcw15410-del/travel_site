@@ -4,20 +4,20 @@
     <meta charset="UTF-8">
     <title>여행 지도</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
     <style>
-        body { margin:0; padding:0; }
-        #map { height: 100vh; }
+        #map { height: 600px; width: 100%; }
     </style>
 </head>
 <body>
+    <h2>여행 지도</h2>
     <div id="map"></div>
 
-    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
     <script>
-        var map = L.map('map').setView([20, 105], 4);
+        var map = L.map('map').setView([20, 100], 3);
 
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '&copy; OpenStreetMap contributors'
+            attribution: 'Map data © <a href="https://openstreetmap.org">OpenStreetMap</a> contributors'
         }).addTo(map);
 
         var places = {
@@ -30,7 +30,7 @@
 
         for (var name in places) {
             var marker = L.marker(places[name]).addTo(map);
-            marker.bindPopup("<b>" + name + "</b>").openPopup;
+            marker.bindPopup("<b>" + name + "</b>");
         }
     </script>
 </body>
