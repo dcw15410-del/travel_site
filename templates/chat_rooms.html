@@ -1,18 +1,12 @@
 {% extends "base.html" %}
 {% block content %}
 <h2>채팅방 목록</h2>
-<div class="row">
-  {% for room in chat_rooms %}
-  <div class="col-md-3 mb-3">
-    <div class="card">
-      <div class="card-body">
-        <h5 class="card-title">{{ room }}</h5>
-        <p>인원: <span id="count-{{ room }}">{{ room_users[room] }}</span>명</p>
-        <p>현지시각: <span id="time-{{ room }}">{{ room_times[room] }}</span></p>
-        <a href="{{ url_for('chat', room=room) }}" class="btn btn-primary">입장</a>
-      </div>
-    </div>
-  </div>
-  {% endfor %}
+<div class="list-group">
+  <a href="{{ url_for('chat', room='room1') }}" class="list-group-item list-group-item-action">
+    1번방 <span id="count-room1" class="badge bg-primary float-end">0</span>
+  </a>
+  <a href="{{ url_for('chat', room='room2') }}" class="list-group-item list-group-item-action">
+    2번방 <span id="count-room2" class="badge bg-primary float-end">0</span>
+  </a>
 </div>
 {% endblock %}
