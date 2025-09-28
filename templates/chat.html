@@ -1,50 +1,63 @@
 {% extends "base.html" %}
-{% block title %}{{ room }} 채팅{% endblock %}
-{% block head %}
-<script>
-    const socket = io();
-    const room = "{{ room }}";
-    const user = "{{ user.nickname if user else '익명' }}";
-    window.onload = () => {
-        socket.emit('join', {room, user});
-        const form = document.getElementById('chat-form');
-        form.onsubmit = (e) => {
-            e.preventDefault();
-            const msgInput = document.getElementById('msg');
-            if(msgInput.value.trim() === '') return;
-            socket.emit('send_message', {room, msg: msgInput.value, user});
-            msgInput.value = '';
-        }
-    }
-
-    socket.on('receive_message', data => {
-        const chat = document.getElementById('chat-box');
-        const msg = document.createElement('div');
-        msg.textContent = `[${data.time}] ${data.user}: ${data.msg}`;
-        chat.appendChild(msg);
-        chat.scrollTop = chat.scrollHeight;
-    });
-
-    socket.on('room_users_update', data => {
-        document.getElementById('user-count').textContent = data[room] || 0;
-    });
-
-    window.onbeforeunload = () => {
-        socket.emit('leave', {room, user});
-    }
-</script>
-{% endblock %}
+{% block title %}{{ room }} 채팅방{% endblock %}
 {% block content %}
-<h2>{{ room }} 채팅</h2>
-<p>현재 접속 인원: <span id="user-count">{{ room_users[room] }}</span></p>
-<div id="chat-box" style="border:1px solid #ccc; height:300px; overflow-y:scroll; padding:5px;">
-    {% for msg in messages %}
-    <div>[{{ msg.created_at.strftime("%H:%M:%S") }}] {{ msg.nickname }}: {{ msg.text }}</div>
-    {% endfor %}
-</div>
-<form id="chat-form">
-    <input type="text" id="msg" placeholder="메시지 입력" autocomplete="off">
-    <button type="submit">전송</button>
+<h2 class="mb-3">{{ room }} 채팅방</h2>
+<p>현재 인원: <span id="user-count">0</span>명</p>
+<p>현지 시각: <span id="local-time">--:--:--</span></p>
+<div id="chat-box" class="border rounded p-3 mb-3 bg-white" style="height:400px; overflow-y:scroll;"></div>
+<form id="chat-form" class="d-flex">
+  <input id="message" class="form-control me-2" autocomplete="off" placeholder="메시지를 입력하세요">
+  <button class="btn btn-primary">전송</button>
 </form>
-<button onclick="history.back()">돌아가기</button>
+<a href="{{ url_for('chat_rooms') }}" class="btn btn-secondary mt-3">목록으로 돌아가기</a>
+{% endblock %}
+
+{% block extra_script %}
+<script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+<script>
+const room = "{{ room }}";
+const user = "{{ user.nickname }}";
+const socket = io();
+
+// 입장
+socket.emit("join", {room: room, user: user});
+
+// 메시지 전송
+document.getElementById("chat-form").onsubmit = e => {
+  e.preventDefault();
+  const msg = document.getElementById("message").value.trim();
+  if (msg) {
+    socket.emit("send_message", {room: room, msg: msg, user: user});
+    document.getElementById("message").value = "";
+  }
+};
+
+// 메시지 수신
+socket.on("receive_message", data => {
+  const box = document.getElementById("chat-box");
+  const div = document.createElement("div");
+  div.textContent = `[${data.time}] ${data.user}: ${data.msg}`;
+  box.appendChild(div);
+  box.scrollTop = box.scrollHeight;
+});
+
+// 인원수 업데이트
+socket.on("room_users_update", data => {
+  const count = data.counts[room];
+  document.getElementById("user-count").textContent = count;
+});
+
+// 현지 시각 매초 업데이트
+function updateTime() {
+  const now = new Date();
+  document.getElementById("local-time").textContent =
+    now.toLocaleTimeString("ko-KR", {hour12:false});
+}
+setInterval(updateTime, 1000);
+
+// 나가기 처리
+window.addEventListener("beforeunload", () => {
+  socket.emit("leave", {room: room, user: user});
+});
+</script>
 {% endblock %}

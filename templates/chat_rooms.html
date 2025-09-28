@@ -1,13 +1,44 @@
 {% extends "base.html" %}
 {% block title %}채팅방 목록{% endblock %}
 {% block content %}
-<h2>채팅방 목록</h2>
-<ul>
-    {% for room in chat_rooms %}
-    <li>
-        <a href="{{ url_for('chat', room=room) }}">{{ room }}</a> (현재 접속: {{ room_users[room] }})
-    </li>
-    {% endfor %}
-</ul>
-<button onclick="history.back()">돌아가기</button>
+<h2 class="mb-4">채팅방 목록</h2>
+<div class="row">
+  {% for room in chat_rooms %}
+    <div class="col-md-4 mb-3">
+      <div class="card shadow-sm">
+        <div class="card-body">
+          <h5 class="card-title">{{ room }}</h5>
+          <p class="card-text">
+            현재 인원: <span id="count-{{ room }}">{{ room_users[room] }}</span>명<br>
+            현지 시각: <span id="time-{{ room }}">{{ room_times[room] }}</span>
+          </p>
+          <a href="{{ url_for('chat', room=room) }}" class="btn btn-primary">입장하기</a>
+        </div>
+      </div>
+    </div>
+  {% endfor %}
+</div>
+{% endblock %}
+
+{% block extra_script %}
+<script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+<script>
+const socket = io();
+socket.on("room_users_update", data => {
+  for (const [room, count] of Object.entries(data.counts)) {
+    const el = document.getElementById("count-" + room);
+    if (el) el.textContent = count;
+  }
+});
+
+// 현지 시각 클라이언트에서 매초 업데이트
+function updateClocks() {
+  const now = new Date();
+  {% for room in chat_rooms %}
+    document.getElementById("time-{{ room }}").textContent =
+      now.toLocaleTimeString("ko-KR", { hour12:false });
+  {% endfor %}
+}
+setInterval(updateClocks, 1000);
+</script>
 {% endblock %}
