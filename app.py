@@ -1,204 +1,455 @@
-# -----------------------------
-# gevent 기반 안정화 버전
-# -----------------------------
-from gevent import monkey
-monkey.patch_all()  # 반드시 최상단에 위치
-
-from flask import Flask, render_template, request, redirect, session, flash, url_for, jsonify
+# app.py
+import os
+import logging
+from datetime import datetime
+from flask import (
+    Flask, render_template, request, redirect, url_for,
+    flash, session, jsonify, send_from_directory
+)
 from flask_sqlalchemy import SQLAlchemy
-from flask_socketio import SocketIO, emit, join_room, leave_room, disconnect
+from flask_socketio import SocketIO, emit, join_room, leave_room
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
-from datetime import datetime
-import os, pytz, logging
+import pytz
+import requests
 
 # -----------------------------
 # 기본 설정
 # -----------------------------
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 app = Flask(__name__)
-app.secret_key = os.environ.get("SECRET_KEY", "dev_secret")
+app.secret_key = os.environ.get("SECRET_KEY", "change_this_secret_for_production")
 
-# DB 설정 (Render PostgreSQL 환경 가정)
-app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get(
-    "DATABASE_URL",
-    "sqlite:///travel_site.db"  # 로컬 테스트용 SQLite (파일명 변경)
-).replace("postgres://", "postgresql://")
+# DB 파일 이름: travel_site.db (요청하신 이름)
+basedir = os.path.abspath(os.path.dirname(__file__))
+db_path = os.path.join(basedir, 'travel_site.db')
+app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{db_path}"
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+# 업로드 폴더
+UPLOAD_FOLDER = os.path.join(basedir, 'static', 'uploads')
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
+
 db = SQLAlchemy(app)
-
-# SocketIO 설정 (gevent 기반)
-socketio = SocketIO(app, cors_allowed_origins="*")
+socketio = SocketIO(app, cors_allowed_origins="*")  # async_mode auto 선택
 
 # -----------------------------
-# 모델 정의
+# DB 모델
 # -----------------------------
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(150), unique=True, nullable=False)
-    password_hash = db.Column(db.String(256), nullable=False)
-    nickname = db.Column(db.String(150), nullable=False)
+    username = db.Column(db.String(50), unique=True, nullable=False)
+    nickname = db.Column(db.String(50), unique=True, nullable=False)
+    email = db.Column(db.String(120), unique=True, nullable=False)
+    password_hash = db.Column(db.String(200), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 class Post(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(200), nullable=False)
+    excerpt = db.Column(db.String(300), nullable=True)
     content = db.Column(db.Text, nullable=False)
+    image = db.Column(db.String(300), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+
+class Subscriber(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    email = db.Column(db.String(120), unique=True, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+class Message(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    room = db.Column(db.String(100), nullable=False, default="한국")
+    nickname = db.Column(db.String(80), nullable=False)
+    text = db.Column(db.String(1000), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 # -----------------------------
-# 유틸 함수
+# 채팅방 & 타임존
 # -----------------------------
-def current_user():
+CHAT_ROOMS = ["한국", "일본", "베트남", "필리핀", "태국"]
+TIMEZONE_MAP = {
+    "한국": "Asia/Seoul",
+    "일본": "Asia/Tokyo",
+    "베트남": "Asia/Ho_Chi_Minh",
+    "필리핀": "Asia/Manila",
+    "태국": "Asia/Bangkok"
+}
+
+# 실시간 접속자 관리 (메모리) - room -> set(sid)
+room_members = {room: set() for room in CHAT_ROOMS}
+# sid -> {nick, room}
+sid_map = {}
+
+def build_room_state_payload():
+    """채팅방별 인원수와 닉네임 목록을 반환"""
+    counts = {room: len(room_members.get(room, set())) for room in CHAT_ROOMS}
+    lists = {}
+    for room in CHAT_ROOMS:
+        names = []
+        for sid in room_members.get(room, set()):
+            info = sid_map.get(sid)
+            if info:
+                names.append(info.get('nick', '익명'))
+        lists[room] = names
+    return {"counts": counts, "lists": lists}
+
+# -----------------------------
+# 템플릿 공통 변수
+# -----------------------------
+@app.context_processor
+def inject_user_and_subscription_and_times():
+    user = None
+    subscribed = False
     if "user_id" in session:
-        return User.query.get(session["user_id"])
-    return None
+        try:
+            user = User.query.get(session["user_id"])
+            if user:
+                subscribed = Subscriber.query.filter_by(email=user.email).first() is not None
+        except Exception:
+            user = None
+
+    room_times = {}
+    for room in CHAT_ROOMS:
+        try:
+            tz = pytz.timezone(TIMEZONE_MAP[room])
+            room_times[room] = datetime.now(tz).strftime("%H:%M:%S")
+        except Exception:
+            room_times[room] = datetime.utcnow().strftime("%H:%M:%S")
+
+    return dict(
+        current_user=user,
+        is_subscribed=subscribed,
+        chat_rooms=CHAT_ROOMS,
+        room_times=room_times,
+        room_users={r: len(room_members[r]) for r in CHAT_ROOMS},
+        timezone_map=TIMEZONE_MAP
+    )
 
 # -----------------------------
-# 라우트
+# 유틸
 # -----------------------------
-@app.route("/")
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+# -----------------------------
+# 라우트: 메인 / 글
+# -----------------------------
+@app.route('/')
 def index():
-    posts = Post.query.order_by(Post.created_at.desc()).limit(3).all()
-    return render_template("index.html", user=current_user(), posts=posts)
+    latest_posts = Post.query.order_by(Post.created_at.desc()).limit(3).all()
+    return render_template("index.html", posts=latest_posts)
 
-@app.route("/register", methods=["GET", "POST"])
-def register():
-    if request.method == "POST":
-        username = request.form["username"].strip()
-        password = request.form["password"].strip()
-        nickname = request.form["nickname"].strip()
-
-        if not username or not password or not nickname:
-            flash("모든 필드를 입력하세요.", "danger")
-            return redirect(url_for("register"))
-
-        if User.query.filter_by(username=username).first():
-            flash("이미 존재하는 사용자입니다.", "danger")
-            return redirect(url_for("register"))
-
-        hashed_pw = generate_password_hash(password)
-        user = User(username=username, password_hash=hashed_pw, nickname=nickname)
-        db.session.add(user)
-        db.session.commit()
-        flash("회원가입 성공! 로그인 해주세요.", "success")
-        return redirect(url_for("login"))
-
-    return render_template("register.html")
-
-@app.route("/login", methods=["GET", "POST"])
-def login():
-    if request.method == "POST":
-        username = request.form["username"]
-        password = request.form["password"]
-
-        user = User.query.filter_by(username=username).first()
-        if user and check_password_hash(user.password_hash, password):
-            session["user_id"] = user.id
-            flash("로그인 성공!", "success")
-            return redirect(url_for("index"))
-        else:
-            flash("아이디 또는 비밀번호가 잘못되었습니다.", "danger")
-            return redirect(url_for("login"))
-
-    return render_template("login.html")
-
-@app.route("/logout")
-def logout():
-    session.clear()
-    flash("로그아웃 되었습니다.", "info")
-    return redirect(url_for("index"))
-
-@app.route("/posts")
+@app.route('/posts')
 def posts():
-    posts = Post.query.order_by(Post.created_at.desc()).all()
-    return render_template("posts.html", posts=posts, user=current_user())
+    all_posts = Post.query.order_by(Post.created_at.desc()).all()
+    return render_template("posts.html", posts=all_posts)
 
-@app.route("/posts/new", methods=["GET", "POST"])
+@app.route('/post/<int:post_id>')
+def post_detail(post_id):
+    post = Post.query.get_or_404(post_id)
+    return render_template("post_detail.html", post=post)
+
+@app.route('/post/new', methods=['GET','POST'])
 def new_post():
-    if not current_user():
-        flash("로그인 후 작성 가능합니다.", "danger")
-        return redirect(url_for("login"))
-
-    if request.method == "POST":
-        title = request.form["title"]
-        content = request.form["content"]
+    if "user_id" not in session:
+        flash("글 작성은 로그인 후 가능합니다.")
+        return redirect(url_for('login'))
+    if request.method == 'POST':
+        title = request.form.get('title','').strip()
+        content = request.form.get('content','').strip()
+        file = request.files.get('image')
 
         if not title or not content:
-            flash("제목과 내용을 입력하세요.", "danger")
-            return redirect(url_for("new_post"))
+            flash("제목과 내용을 입력하세요.")
+            return redirect(url_for('new_post'))
 
-        post = Post(title=title, content=content)
+        filename = None
+        if file and file.filename and allowed_file(file.filename):
+            filename = secure_filename(f"{int(datetime.utcnow().timestamp())}_{file.filename}")
+            try:
+                file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+            except Exception as e:
+                logger.exception("파일 저장 실패")
+                flash("이미지 업로드 중 오류가 발생했습니다.")
+
+        excerpt = (content[:280] + '...') if len(content) > 280 else content
+        post = Post(title=title, content=content, excerpt=excerpt,
+                    image=filename, user_id=session['user_id'])
         db.session.add(post)
         db.session.commit()
-        flash("게시글이 작성되었습니다.", "success")
-        return redirect(url_for("posts"))
+        flash("새 글이 등록되었습니다.")
+        return redirect(url_for('posts'))
+    return render_template("new_post.html")
 
-    return render_template("new_post.html", user=current_user())
+@app.route('/post/<int:post_id>/delete', methods=['POST'])
+def delete_post(post_id):
+    if "user_id" not in session:
+        flash("로그인 후 삭제 가능합니다.")
+        return redirect(url_for('login'))
 
-@app.route("/chat_rooms")
+    post = Post.query.get_or_404(post_id)
+    if post.user_id != session["user_id"]:
+        flash("본인 글만 삭제할 수 있습니다.")
+        return redirect(url_for('post_detail', post_id=post.id))
+
+    # 파일 삭제
+    if post.image:
+        try:
+            path = os.path.join(app.config['UPLOAD_FOLDER'], post.image)
+            if os.path.exists(path):
+                os.remove(path)
+        except Exception:
+            logger.exception("이미지 삭제 실패")
+
+    db.session.delete(post)
+    db.session.commit()
+    flash("게시글이 삭제되었습니다.")
+    return redirect(url_for('posts'))
+
+# -----------------------------
+# 회원가입 / 로그인 / 로그아웃
+# -----------------------------
+@app.route('/register', methods=['GET','POST'])
+def register():
+    if request.method == 'POST':
+        username = request.form.get('username','').strip()
+        nickname = request.form.get('nickname','').strip()
+        email = request.form.get('email','').strip().lower()
+        password = request.form.get('password','').strip()
+        if not all([username, nickname, email, password]):
+            flash("모든 항목을 입력해주세요.")
+            return redirect(url_for('register'))
+        if User.query.filter((User.username==username)|(User.email==email)|(User.nickname==nickname)).first():
+            flash("이미 존재하는 아이디, 이메일 또는 닉네임입니다.")
+            return redirect(url_for('register'))
+        pw_hash = generate_password_hash(password)
+        user = User(username=username, nickname=nickname, email=email, password_hash=pw_hash)
+        db.session.add(user)
+        db.session.commit()
+        flash("회원가입 완료. 로그인 해주세요.")
+        return redirect(url_for('login'))
+    return render_template("register.html")
+
+@app.route('/login', methods=['GET','POST'])
+def login():
+    if request.method=='POST':
+        username = request.form.get('username','').strip()
+        password = request.form.get('password','').strip()
+        user = User.query.filter_by(username=username).first()
+        if user and check_password_hash(user.password_hash, password):
+            session['user_id'] = user.id
+            flash(f"{user.nickname}님 환영합니다.")
+            return redirect(url_for('index'))
+        flash("로그인 실패: 아이디 또는 비밀번호 확인")
+        return redirect(url_for('login'))
+    return render_template("login.html")
+
+@app.route('/logout')
+def logout():
+    session.pop('user_id', None)
+    flash("로그아웃되었습니다.")
+    return redirect(url_for('index'))
+
+# -----------------------------
+# 구독
+# -----------------------------
+@app.route('/subscribe', methods=['POST'])
+def subscribe():
+    email = None
+    if "user_id" in session:
+        user = User.query.get(session['user_id'])
+        email = user.email if user else None
+    else:
+        email = request.form.get('email','').strip().lower()
+    if not email:
+        flash("이메일이 필요합니다.")
+        return redirect(url_for('index'))
+    if Subscriber.query.filter_by(email=email).first():
+        flash("이미 구독 중입니다.")
+    else:
+        sub = Subscriber(email=email)
+        db.session.add(sub)
+        db.session.commit()
+        flash("구독이 완료되었습니다.")
+    return redirect(request.referrer or url_for('index'))
+
+# -----------------------------
+# 채팅 라우트
+# -----------------------------
+@app.route('/chat')
 def chat_rooms():
-    return render_template("chat_rooms.html", user=current_user())
+    # 초기 렌더에 현재 접속자 닉네임 목록을 제공 (실시간은 소켓으로 업데이트)
+    room_user_list = {r: [sid_map.get(sid, {}).get('nick','익명') for sid in room_members[r]] for r in CHAT_ROOMS}
+    return render_template('chat_rooms.html', room_user_list=room_user_list)
 
-@app.route("/chat/<room>")
+@app.route('/chat/<room>')
 def chat(room):
-    if not current_user():
-        flash("로그인 후 채팅방에 입장할 수 있습니다.", "danger")
-        return redirect(url_for("login"))
-    return render_template("chat.html", room=room, user=current_user())
+    if "user_id" not in session:
+        flash("채팅은 로그인 후 이용 가능합니다.")
+        return redirect(url_for('login'))
+    if room not in CHAT_ROOMS:
+        flash("존재하지 않는 채팅방입니다.")
+        return redirect(url_for('chat_rooms'))
+    user = User.query.get(session['user_id'])
+    # 최근 메시지 (예: 마지막 50개)
+    messages = Message.query.filter_by(room=room).order_by(Message.created_at.asc()).limit(200).all()
+    return render_template('chat.html', messages=messages, user=user, room=room)
 
-@app.route("/map")
-def map_page():
-    return render_template("map.html", user=current_user())
+# -----------------------------
+# 지도 라우트
+# -----------------------------
+@app.route('/map')
+def map_view():
+    return render_template("map.html")
+
+# -----------------------------
+# 환율 계산 API 및 페이지
+# -----------------------------
+@app.route('/convert_currency')
+def convert_currency_api():
+    from_cur = request.args.get("from")
+    to_cur = request.args.get("to")
+    try:
+        amount = float(request.args.get('amount', '1') or '1')
+    except Exception:
+        amount = 1.0
+
+    currencies = {
+        "USD":"미국 달러","KRW":"대한민국 원","JPY":"일본 엔",
+        "EUR":"유로","CNY":"중국 위안","THB":"태국 바트",
+        "VND":"베트남 동","PHP":"필리핀 페소"
+    }
+
+    if not from_cur or not to_cur:
+        return jsonify({"error": "통화 파라미터가 필요합니다."}), 400
+
+    if from_cur not in currencies or to_cur not in currencies:
+        return jsonify({"error": "지원하지 않는 통화입니다."}), 400
+
+    try:
+        url = f"https://api.exchangerate.host/convert?from={from_cur}&to={to_cur}&amount={amount}"
+        resp = requests.get(url, timeout=8)
+        data = resp.json()
+
+        if data.get("result") is not None:
+            result = round(data.get("result", 0), 4)
+            rate = round(data.get("info", {}).get("rate", 0), 6)
+            return jsonify({"result": result, "rate": rate})
+
+        # 백업
+        backup_url = f"https://open.er-api.com/v6/latest/{from_cur}"
+        r2 = requests.get(backup_url, timeout=8)
+        data2 = r2.json()
+
+        if data2.get("result") == "success" and to_cur in data2.get("rates", {}):
+            rate = data2["rates"][to_cur]
+            return jsonify({"result": round(amount * rate, 4), "rate": round(rate, 6)})
+
+        return jsonify({"error": "환율 계산 실패"}), 500
+
+    except Exception as e:
+        logger.exception("환율 API 오류")
+        return jsonify({"error": f"서버 오류: {str(e)}"}), 500
+
+@app.route('/currency')
+def currency_page():
+    currencies = {
+        "USD":"미국 달러","KRW":"대한민국 원","JPY":"일본 엔",
+        "EUR":"유로","CNY":"중국 위안","THB":"태국 바트",
+        "VND":"베트남 동","PHP":"필리핀 페소"
+    }
+    return render_template("currency.html", currencies=currencies)
 
 # -----------------------------
 # SocketIO 이벤트
 # -----------------------------
-rooms_users = {}  # {room: set(usernames)}
+@socketio.on('join')
+def on_join(data):
+    room = data.get('room','한국')
+    nickname = data.get('user','익명')
+    sid = request.sid
 
-@socketio.on("join")
-def handle_join(data):
-    room = data["room"]
-    user = data["user"]
+    # 이전 방에서 제거 (있다면)
+    prev_info = sid_map.get(sid)
+    prev_room = prev_info.get('room') if prev_info else None
+    if prev_room and prev_room != room:
+        if sid in room_members.get(prev_room, set()):
+            room_members[prev_room].discard(sid)
+        sid_map.pop(sid, None)
+
+    # 새 방에 추가
+    room_members.setdefault(room, set()).add(sid)
+    sid_map[sid] = {'nick': nickname, 'room': room}
+
     join_room(room)
 
-    if room not in rooms_users:
-        rooms_users[room] = set()
-    rooms_users[room].add(user)
+    ts = datetime.now().strftime("%H:%M:%S")
+    emit('receive_message', {'user':'시스템','msg':f'{nickname}님이 입장했습니다.','time':ts}, room=room)
+    socketio.emit('room_users_update', build_room_state_payload(), broadcast=True)
 
-    emit("receive_message", {"msg": f"{user} 님이 입장했습니다.", "user": "SYSTEM", "time": now_time()}, room=room)
-    emit("room_users_update", {"lists": {room: list(rooms_users[room])}, "counts": {room: len(rooms_users[room])}}, room=room)
+@socketio.on('leave')
+def on_leave(data):
+    room = data.get('room','한국')
+    nickname = data.get('user','익명')
+    sid = request.sid
 
-@socketio.on("leave")
-def handle_leave(data):
-    room = data["room"]
-    user = data["user"]
+    if sid in room_members.get(room, set()):
+        room_members[room].discard(sid)
+    sid_map.pop(sid, None)
+
     leave_room(room)
+    ts = datetime.now().strftime("%H:%M:%S")
+    emit('receive_message', {'user':'시스템','msg':f'{nickname}님이 퇴장했습니다.', 'time':ts}, room=room)
+    socketio.emit('room_users_update', build_room_state_payload(), broadcast=True)
 
-    if room in rooms_users and user in rooms_users[room]:
-        rooms_users[room].remove(user)
+@socketio.on('disconnect')
+def on_disconnect():
+    sid = request.sid
+    info = sid_map.pop(sid, None)
+    if info:
+        room = info.get('room')
+        if room and sid in room_members.get(room, set()):
+            room_members[room].discard(sid)
+            socketio.emit('room_users_update', build_room_state_payload(), broadcast=True)
 
-    emit("receive_message", {"msg": f"{user} 님이 퇴장했습니다.", "user": "SYSTEM", "time": now_time()}, room=room)
-    emit("room_users_update", {"lists": {room: list(rooms_users.get(room, []))}, "counts": {room: len(rooms_users.get(room, []))}}, room=room)
-
-@socketio.on("send_message")
-def handle_message(data):
-    room = data["room"]
-    msg = data["msg"]
-    user = data["user"]
-    emit("receive_message", {"msg": msg, "user": user, "time": now_time()}, room=room)
+@socketio.on('send_message')
+def handle_send_message(data):
+    room = data.get('room','한국')
+    text = data.get('msg','').strip()
+    # 클라이언트에서 전달된 user 우선, 없으면 세션 기반 nickname 사용
+    nickname = data.get('user') or (session.get('user_id') and User.query.get(session['user_id']).nickname) or "익명"
+    if not text:
+        return
+    ts = datetime.utcnow()
+    try:
+        m = Message(room=room, nickname=nickname, text=text, created_at=ts)
+        db.session.add(m)
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        logger.exception("메시지 DB 저장 실패")
+    emit('receive_message', {'user': nickname, 'msg': text, 'time': ts.strftime("%H:%M:%S")}, room=room)
 
 # -----------------------------
-# 헬퍼
+# 정적 업로드 파일 제공 (선택적)
 # -----------------------------
-def now_time():
-    tz = pytz.timezone("Asia/Seoul")
-    return datetime.now(tz).strftime("%H:%M:%S")
+@app.route('/uploads/<filename>')
+def uploaded_file(filename):
+    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
 # -----------------------------
-# 실행
+# DB 생성 및 실행
 # -----------------------------
-if __name__ == "__main__":
-    with app.app_context():
-        db.create_all()
-    socketio.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
+with app.app_context():
+    db.create_all()
+    logger.info(f"DB ensured at {db_path}")
+
+if __name__ == '__main__':
+    debug_mode = os.environ.get('FLASK_DEBUG', '0') == '1'
+    socketio.run(app, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=debug_mode)
