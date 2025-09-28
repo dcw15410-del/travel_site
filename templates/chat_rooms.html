@@ -1,44 +1,103 @@
+<!-- templates/chat_rooms.html -->
 {% extends "base.html" %}
-{% block title %}채팅방 목록{% endblock %}
 {% block content %}
-<h2 class="mb-4">채팅방 목록</h2>
 <div class="row">
-  {% for room in chat_rooms %}
-    <div class="col-md-4 mb-3">
-      <div class="card shadow-sm">
-        <div class="card-body">
-          <h5 class="card-title">{{ room }}</h5>
-          <p class="card-text">
-            현재 인원: <span id="count-{{ room }}">{{ room_users[room] }}</span>명<br>
-            현지 시각: <span id="time-{{ room }}">{{ room_times[room] }}</span>
-          </p>
-          <a href="{{ url_for('chat', room=room) }}" class="btn btn-primary">입장하기</a>
+  <div class="col-md-8">
+    <h3>채팅방 목록</h3>
+    <div class="list-group">
+      {% for room in chat_rooms %}
+      <a class="list-group-item list-group-item-action d-flex justify-content-between align-items-center room-card"
+         href="{{ url_for('chat', room=room) }}">
+        <div>
+          <strong>{{ room }}</strong>
+          <div class="small text-muted">참여자: <span id="count-{{ loop.index0 }}">{{ room_users[room] }}</span></div>
         </div>
-      </div>
+        <div class="text-end">
+          <div class="small text-muted" id="time-{{ loop.index0 }}">{{ room_times[room] }}</div>
+          <div class="badge bg-primary rounded-pill" id="badge-{{ loop.index0 }}">{{ room_users[room] }}</div>
+        </div>
+      </a>
+      {% endfor %}
     </div>
-  {% endfor %}
+  </div>
+
+  <div class="col-md-4">
+    <h5>방별 참가자</h5>
+    <div id="room-users" class="card p-2">
+      {% for room in chat_rooms %}
+        <div class="mb-2">
+          <strong>{{ room }} (<span id="rname-count-{{ loop.index0 }}">{{ room_users[room] }}</span>)</strong>
+          <ul id="rlist-{{ loop.index0 }}">
+            {% for n in room_user_list[room] %}
+              <li>{{ n }}</li>
+            {% endfor %}
+          </ul>
+        </div>
+      {% endfor %}
+    </div>
+  </div>
 </div>
-{% endblock %}
 
-{% block extra_script %}
-<script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
 <script>
-const socket = io();
-socket.on("room_users_update", data => {
-  for (const [room, count] of Object.entries(data.counts)) {
-    const el = document.getElementById("count-" + room);
-    if (el) el.textContent = count;
-  }
-});
+  const socket = io();
 
-// 현지 시각 클라이언트에서 매초 업데이트
-function updateClocks() {
-  const now = new Date();
-  {% for room in chat_rooms %}
-    document.getElementById("time-{{ room }}").textContent =
-      now.toLocaleTimeString("ko-KR", { hour12:false });
-  {% endfor %}
-}
-setInterval(updateClocks, 1000);
+  // TIMEZONE_MAP from server (injected by context processor)
+  const TIMEZONE_MAP = {{ timezone_map|tojson }};
+  const rooms = {{ chat_rooms|tojson }};
+  // initial counts from template (room_users)
+  const countsElem = {};
+  const badgeElem = {};
+  const timeElem = {};
+  const listElem = {};
+
+  rooms.forEach((r, idx) => {
+    countsElem[idx] = document.getElementById('count-' + idx);
+    badgeElem[idx] = document.getElementById('badge-' + idx);
+    timeElem[idx] = document.getElementById('time-' + idx);
+    listElem[idx] = document.getElementById('rlist-' + idx);
+  });
+
+  // Update local times using Intl API every second
+  function updateTimes() {
+    rooms.forEach((r, idx) => {
+      const tz = TIMEZONE_MAP[r];
+      try {
+        const now = new Date();
+        const fmt = new Intl.DateTimeFormat('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false, timeZone: tz });
+        timeElem[idx].innerText = fmt.format(now);
+      } catch (e) {
+        // fallback: keep server time initially provided
+      }
+    });
+  }
+  updateTimes();
+  setInterval(updateTimes, 1000);
+
+  // Listen for room_users_update payload {counts: {...}, lists: {...}}
+  socket.on('room_users_update', function(payload) {
+    if (!payload) return;
+    const counts = payload.counts || {};
+    const lists = payload.lists || {};
+    rooms.forEach((r, idx) => {
+      const c = counts[r] != null ? counts[r] : countsElem[idx].innerText;
+      countsElem[idx].innerText = c;
+      badgeElem[idx].innerText = c;
+      // rebuild user list
+      const users = lists[r] || [];
+      listElem[idx].innerHTML = '';
+      users.forEach(u => {
+        const li = document.createElement('li');
+        li.innerText = u;
+        listElem[idx].appendChild(li);
+      });
+    });
+  });
+
+  // On connect, ask server for current state (server broadcasts periodically on join/leave)
+  socket.on('connect', () => {
+    // nothing to join here; server will broadcast on events
+    // but request current payload by emiting a harmless event or rely on server broadcasts
+    // (server emits on changes; if needed you could implement a 'request_state' event)
+  });
 </script>
 {% endblock %}
