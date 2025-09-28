@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "change_this_secret_for_production")
 
-# DB 파일 이름: travel_site.db (프로젝트 루트에 생성)
+# DB 파일 travel_site.db (프로젝트 루트)
 basedir = os.path.abspath(os.path.dirname(__file__))
 db_path = os.path.join(basedir, 'travel_site.db')
 app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{db_path}"
@@ -35,7 +35,7 @@ app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
 
 db = SQLAlchemy(app)
-socketio = SocketIO(app, cors_allowed_origins="*")  # async_mode auto 선택
+socketio = SocketIO(app, cors_allowed_origins="*")
 
 # -----------------------------
 # DB 모델
@@ -81,13 +81,10 @@ TIMEZONE_MAP = {
     "태국": "Asia/Bangkok"
 }
 
-# 실시간 접속자 관리 (메모리) - room -> set(sid)
 room_members = {room: set() for room in CHAT_ROOMS}
-# sid -> {nick, room}
 sid_map = {}
 
 def build_room_state_payload():
-    """채팅방별 인원수와 닉네임 목록을 반환"""
     counts = {room: len(room_members.get(room, set())) for room in CHAT_ROOMS}
     lists = {}
     for room in CHAT_ROOMS:
@@ -138,7 +135,7 @@ def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 # -----------------------------
-# 라우트: 메인 / 글
+# 라우트
 # -----------------------------
 @app.route('/')
 def index():
@@ -198,7 +195,6 @@ def delete_post(post_id):
         flash("본인 글만 삭제할 수 있습니다.")
         return redirect(url_for('post_detail', post_id=post.id))
 
-    # 파일 삭제
     if post.image:
         try:
             path = os.path.join(app.config['UPLOAD_FOLDER'], post.image)
@@ -284,7 +280,6 @@ def subscribe():
 # -----------------------------
 @app.route('/chat')
 def chat_rooms():
-    # 초기 렌더에 현재 접속자 닉네임 목록을 제공 (실시간은 소켓으로 업데이트)
     room_user_list = {r: [sid_map.get(sid, {}).get('nick','익명') for sid in room_members[r]] for r in CHAT_ROOMS}
     return render_template('chat_rooms.html', room_user_list=room_user_list)
 
@@ -297,7 +292,6 @@ def chat(room):
         flash("존재하지 않는 채팅방입니다.")
         return redirect(url_for('chat_rooms'))
     user = User.query.get(session['user_id'])
-    # 최근 메시지 (예: 마지막 200개)
     messages = Message.query.filter_by(room=room).order_by(Message.created_at.asc()).limit(200).all()
     return render_template('chat.html', messages=messages, user=user, room=room)
 
@@ -309,7 +303,7 @@ def map_view():
     return render_template("map.html")
 
 # -----------------------------
-# 환율 계산 API 및 페이지
+# 환율 계산
 # -----------------------------
 @app.route('/convert_currency')
 def convert_currency_api():
@@ -342,8 +336,7 @@ def convert_currency_api():
             rate = round(data.get("info", {}).get("rate", 0), 6)
             return jsonify({"result": result, "rate": rate})
 
-        # 백업
-        backup_url = f"https://open.er-api.com/v6/latest/{from_cur}"
+        backup_url = f"https://open.er-api.com/v6/latest/{from_cur}"`
         r2 = requests.get(backup_url, timeout=8)
         data2 = r2.json()
 
@@ -375,7 +368,6 @@ def on_join(data):
     nickname = data.get('user','익명')
     sid = request.sid
 
-    # 이전 방에서 제거 (있다면)
     prev_info = sid_map.get(sid)
     prev_room = prev_info.get('room') if prev_info else None
     if prev_room and prev_room != room:
@@ -383,12 +375,10 @@ def on_join(data):
             room_members[prev_room].discard(sid)
         sid_map.pop(sid, None)
 
-    # 새 방에 추가
     room_members.setdefault(room, set()).add(sid)
     sid_map[sid] = {'nick': nickname, 'room': room}
 
     join_room(room)
-
     ts = datetime.now().strftime("%H:%M:%S")
     emit('receive_message', {'user':'시스템','msg':f'{nickname}님이 입장했습니다.','time':ts}, room=room)
     socketio.emit('room_users_update', build_room_state_payload(), broadcast=True)
@@ -422,7 +412,6 @@ def on_disconnect():
 def handle_send_message(data):
     room = data.get('room','한국')
     text = data.get('msg','').strip()
-    # 클라이언트에서 전달된 user 우선, 없으면 세션 기반 nickname 사용
     nickname = data.get('user') or (session.get('user_id') and User.query.get(session['user_id']).nickname) or "익명"
     if not text:
         return
@@ -437,14 +426,14 @@ def handle_send_message(data):
     emit('receive_message', {'user': nickname, 'msg': text, 'time': ts.strftime("%H:%M:%S")}, room=room)
 
 # -----------------------------
-# 정적 업로드 파일 제공 (선택적)
+# 정적 파일
 # -----------------------------
 @app.route('/uploads/<filename>')
 def uploaded_file(filename):
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
 # -----------------------------
-# DB 생성 및 실행
+# 실행
 # -----------------------------
 with app.app_context():
     db.create_all()
