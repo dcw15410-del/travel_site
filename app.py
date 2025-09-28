@@ -21,8 +21,8 @@ app.secret_key = os.environ.get("SECRET_KEY", "dev_secret")
 # DB 설정 (Render PostgreSQL 환경 가정)
 app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get(
     "DATABASE_URL",
-    "sqlite:///site.db"  # 로컬 테스트용 SQLite
-).replace("postgres://", "postgresql://")  # Render 호환성 처리
+    "sqlite:///travel_site.db"  # 로컬 테스트용 SQLite (파일명 변경)
+).replace("postgres://", "postgresql://")
 
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 db = SQLAlchemy(app)
