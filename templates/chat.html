@@ -1,138 +1,75 @@
-<!-- templates/chat.html -->
 {% extends "base.html" %}
 {% block content %}
-<div class="row">
-  <div class="col-md-8">
-    <div class="d-flex justify-content-between align-items-center mb-2">
-      <h4>{{ room }} 채팅</h4>
-      <div>
-        <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('chat_rooms') }}">목록으로 돌아가기</a>
-        <button id="leaveBtn" class="btn btn-outline-danger btn-sm">나가기</button>
-      </div>
-    </div>
-
-    <div id="messages" class="border rounded p-3 mb-3" style="height:60vh; overflow-y:auto;">
-      <!-- messages will be appended here -->
-    </div>
-
-    <form id="msgForm" class="d-flex">
-      <input id="msgInput" class="form-control me-2" placeholder="메시지를 입력하세요..." autocomplete="off">
-      <button class="btn btn-primary" type="submit">전송</button>
-    </form>
-  </div>
-
-  <div class="col-md-4">
-    <div class="card p-3">
-      <h6>실시간 정보</h6>
-      <p class="mb-1">현지시각: <span id="localTime">--:--:--</span></p>
-      <p class="mb-1">현재 인원: <span id="currentCount">0</span></p>
-      <h6 class="mt-3">참여자 목록</h6>
-      <ul id="participants" class="chat-right list-unstyled"></ul>
-    </div>
+<h2>{{ room }} 채팅방</h2>
+<div class="card">
+  <div class="card-body" id="chat-box" style="height: 400px; overflow-y: auto; background: #fff;">
   </div>
 </div>
 
+<form id="chat-form" class="mt-3 d-flex">
+  <input type="text" id="chat-input" class="form-control me-2" placeholder="메시지를 입력하세요">
+  <button type="submit" class="btn btn-primary">전송</button>
+</form>
+
+<div class="mt-3">
+  <h5>현재 접속자</h5>
+  <ul id="user-list" class="list-group"></ul>
+</div>
+{% endblock %}
+
+{% block scripts %}
 <script>
   const socket = io();
-  const roomName = "{{ room }}";
-  const nickname = "{{ current_user.nickname if current_user else '익명' }}";
+  const room = "{{ room }}";
+  const user = "{{ user.nickname }}";
+  const chatBox = document.getElementById("chat-box");
+  const chatForm = document.getElementById("chat-form");
+  const chatInput = document.getElementById("chat-input");
+  const userList = document.getElementById("user-list");
 
-  const messagesDiv = document.getElementById('messages');
-  const msgForm = document.getElementById('msgForm');
-  const msgInput = document.getElementById('msgInput');
-  const localTimeEl = document.getElementById('localTime');
-  const currentCountEl = document.getElementById('currentCount');
-  const participantsEl = document.getElementById('participants');
-  const leaveBtn = document.getElementById('leaveBtn');
+  // 입장
+  socket.emit("join", {room: room, user: user});
 
-  // timezone map from server
-  const TIMEZONE_MAP = {{ timezone_map|tojson }};
-
-  function updateLocalTime() {
-    try {
-      const tz = TIMEZONE_MAP[roomName];
-      const now = new Date();
-      const fmt = new Intl.DateTimeFormat('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false, timeZone: tz });
-      localTimeEl.innerText = fmt.format(now);
-    } catch (e) {
-      // fallback: use client time
-      const d = new Date();
-      localTimeEl.innerText = d.toTimeString().split(' ')[0];
-    }
-  }
-  updateLocalTime();
-  setInterval(updateLocalTime, 1000);
-
-  function appendMessage(user, text, time, isSystem=false) {
-    const wrap = document.createElement('div');
-    wrap.className = 'message';
-    const small = document.createElement('small');
-    small.className = 'text-muted';
-    small.innerText = time + ' ';
-    const strong = document.createElement('span');
-    strong.className = isSystem ? 'text-secondary' : 'msg-user';
-    strong.innerText = isSystem ? '['+user+']' : user;
-    const p = document.createElement('div');
-    p.appendChild(small);
-    p.appendChild(strong);
-    const txt = document.createElement('div');
-    txt.innerText = text;
-    txt.className = 'ms-4';
-    wrap.appendChild(p);
-    wrap.appendChild(txt);
-    messagesDiv.appendChild(wrap);
-    messagesDiv.scrollTop = messagesDiv.scrollHeight;
-  }
-
-  // Join this room when connected
-  socket.on('connect', () => {
-    socket.emit('join', { room: roomName, user: nickname });
+  // 메시지 수신
+  socket.on("receive_message", (data) => {
+    const p = document.createElement("p");
+    p.innerHTML = `<strong>[${data.time}] ${data.user}:</strong> ${data.msg}`;
+    chatBox.appendChild(p);
+    chatBox.scrollTop = chatBox.scrollHeight;
   });
 
-  // Receive messages broadcast
-  socket.on('receive_message', function(data) {
-    if (!data) return;
-    appendMessage(data.user || '익명', data.msg || '', data.time || '');
-  });
-
-  // Receive room state updates (counts + lists)
-  socket.on('room_users_update', function(payload) {
-    if (!payload) return;
-    const counts = payload.counts || {};
-    const lists = payload.lists || {};
-    currentCountEl.innerText = counts[roomName] != null ? counts[roomName] : 0;
-    // participants
-    participantsEl.innerHTML = '';
-    const arr = lists[roomName] || [];
-    arr.forEach(n => {
-      const li = document.createElement('li');
-      li.innerText = n;
-      participantsEl.appendChild(li);
-    });
-  });
-
-  // Send message
-  msgForm.addEventListener('submit', function(e) {
+  // 메시지 전송
+  chatForm.addEventListener("submit", (e) => {
     e.preventDefault();
-    const text = msgInput.value.trim();
-    if (!text) return;
-    socket.emit('send_message', { room: roomName, msg: text, user: nickname });
-    msgInput.value = '';
+    const msg = chatInput.value.trim();
+    if(msg){
+      socket.emit("send_message", {room: room, user: user, msg: msg});
+      chatInput.value = "";
+    }
   });
 
-  // Leave button
-  leaveBtn.addEventListener('click', function() {
-    socket.emit('leave', { room: roomName, user: nickname });
-    // go back to list after notifying server
-    setTimeout(() => { window.location.href = "{{ url_for('chat_rooms') }}" }, 150);
+  // 사용자 목록 업데이트
+  socket.on("room_users_update", (data) => {
+    if(data.lists && data.lists[room]){
+      userList.innerHTML = "";
+      data.lists[room].forEach((nickname) => {
+        const li = document.createElement("li");
+        li.classList.add("list-group-item");
+        li.textContent = nickname;
+        userList.appendChild(li);
+      });
+    }
+    if(data.counts && data.counts[room] !== undefined){
+      const countSpan = document.getElementById("count-" + room);
+      if(countSpan){
+        countSpan.textContent = data.counts[room];
+      }
+    }
   });
 
-  // Ensure we emit leave on page unload as well
-  window.addEventListener('beforeunload', function (e) {
-    try {
-      socket.emit('leave', { room: roomName, user: nickname });
-      socket.disconnect();
-    } catch (_) {}
+  // 퇴장 시 알림
+  window.addEventListener("beforeunload", () => {
+    socket.emit("leave", {room: room, user: user});
   });
 </script>
 {% endblock %}
