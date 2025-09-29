@@ -1,6 +1,7 @@
-# app.py
 import os
 import logging
+import json
+import urllib.request
 from datetime import datetime
 from flask import (
     Flask, render_template, request, redirect, url_for,
@@ -11,7 +12,6 @@ from flask_socketio import SocketIO, emit, join_room, leave_room, disconnect
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 import pytz
-import requests
 
 # -----------------------------
 # 기본 설정
@@ -285,7 +285,6 @@ def chat_rooms():
 
 @app.route('/chat/<room>')
 def chat(room):
-    # 채팅방 입장 자체는 로그인 필요 (보안)
     if "user_id" not in session:
         flash("채팅은 로그인 후 이용 가능합니다.")
         return redirect(url_for('login'))
@@ -293,16 +292,14 @@ def chat(room):
         flash("존재하지 않는 채팅방입니다.")
         return redirect(url_for('chat_rooms'))
     user = User.query.get(session['user_id'])
-    # 최근 메시지 (예: 마지막 200개)
-    messages = Message.query.filter_by(room=room).order_by(Message.created_at.asc()).limit(200).all()
-    return render_template('chat.html', messages=messages, user=user, room=room)
+    # DB에서 메시지 불러오지 않고 빈 리스트만 전달 (재입장 시 과거 메시지 안 보이게)
+    return render_template('chat.html', messages=[], user=user, room=room)
 
 # -----------------------------
 # 지도 라우트
 # -----------------------------
 @app.route('/map')
 def map_view():
-    # map.html은 기본 장소 좌표를 자체적으로 사용하므로 별도 변수를 넘기지 않습니다.
     return render_template("map.html")
 
 # -----------------------------
@@ -325,36 +322,32 @@ def convert_currency_api():
 
     if not from_cur or not to_cur:
         return jsonify({"error": "통화 파라미터가 필요합니다."}), 400
-
     if from_cur not in currencies or to_cur not in currencies:
         return jsonify({"error": "지원하지 않는 통화입니다."}), 400
 
     try:
         url = f"https://api.exchangerate.host/convert?from={from_cur}&to={to_cur}&amount={amount}"
-        resp = requests.get(url, timeout=8)
-        data = resp.json()
+        with urllib.request.urlopen(url, timeout=8) as resp:
+            data = json.loads(resp.read().decode())
 
         if data.get("result") is not None:
             result = round(data.get("result", 0), 4)
             rate = round(data.get("info", {}).get("rate", 0), 6)
             return jsonify({"result": result, "rate": rate})
 
-        # 백업 API 호출 (문법 오류 수정됨)
+        # 백업 API
         backup_url = f"https://open.er-api.com/v6/latest/{from_cur}"
-        r2 = requests.get(backup_url, timeout=8)
-        data2 = r2.json()
+        with urllib.request.urlopen(backup_url, timeout=8) as r2:
+            data2 = json.loads(r2.read().decode())
 
-        # open.er-api 결과 포맷은 success + rates
         if data2.get("result") == "success" and to_cur in data2.get("rates", {}):
             rate = data2["rates"][to_cur]
             return jsonify({"result": round(amount * rate, 4), "rate": round(rate, 6)})
-        # 일부 API는 다른 키를 사용 -> try fallback
         if data2.get("rates") and to_cur in data2.get("rates"):
             rate = data2["rates"][to_cur]
             return jsonify({"result": round(amount * rate, 4), "rate": round(rate, 6)})
 
         return jsonify({"error": "환율 계산 실패"}), 500
-
     except Exception as e:
         logger.exception("환율 API 오류")
         return jsonify({"error": f"서버 오류: {str(e)}"}), 500
@@ -369,19 +362,16 @@ def currency_page():
     return render_template("currency.html", currencies=currencies)
 
 # -----------------------------
-# SocketIO 이벤트 (서버 측 로그인 검사 추가)
+# SocketIO 이벤트
 # -----------------------------
 @socketio.on('join')
 def on_join(data):
-    # 서버에서 반드시 로그인 여부 확인
     if "user_id" not in session:
-        # 클라이언트에게 인증 필요 신호 전달 후 연결 강제 종료
-        emit('auth_required', {'msg': '로그인이 필요합니다. 로그인 후 다시 시도하세요.'})
+        emit('auth_required', {'msg': '로그인이 필요합니다.'})
         disconnect()
         return
 
     room = data.get('room','한국')
-    # 사용자는 서버 세션 기반 닉네임 우선으로 사용
     user = User.query.get(session['user_id'])
     nickname = user.nickname if user else data.get('user','익명')
     sid = request.sid
@@ -399,13 +389,11 @@ def on_join(data):
     join_room(room)
     ts = datetime.now().strftime("%H:%M:%S")
     emit('receive_message', {'user':'시스템','msg':f'{nickname}님이 입장했습니다.','time':ts}, room=room)
-    # 전체 브로드캐스트(인자 없이 emit하면 전체로 전달)
     socketio.emit('room_users_update', build_room_state_payload())
 
 @socketio.on('leave')
 def on_leave(data):
     room = data.get('room','한국')
-    # 서버 세션 기반 닉네임 사용
     user = User.query.get(session['user_id']) if "user_id" in session else None
     nickname = user.nickname if user else data.get('user','익명')
     sid = request.sid
@@ -421,7 +409,6 @@ def on_leave(data):
 
 @socketio.on('disconnect')
 def on_disconnect(*args):
-    # 안전하게 어떤 인자라도 받도록 처리
     sid = request.sid
     info = sid_map.pop(sid, None)
     if info:
@@ -432,7 +419,6 @@ def on_disconnect(*args):
 
 @socketio.on('send_message')
 def handle_send_message(data):
-    # 반드시 로그인 사용자만 전송 허용
     if "user_id" not in session:
         emit('auth_required', {'msg': '로그인이 필요합니다.'})
         return

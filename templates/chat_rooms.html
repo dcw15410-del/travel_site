@@ -3,28 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <title>채팅방 목록</title>
-    <style>
-        body { font-family: Arial, sans-serif; padding:20px; }
-        .room { border:1px solid #ddd; padding:10px; margin:8px 0; border-radius:6px; }
-        .room a { font-weight: bold; text-decoration:none; }
-        .count { color: #666; margin-left:10px; }
-    </style>
 </head>
 <body>
-    <h2>채팅방 목록</h2>
-
-    {% if not current_user %}
-        <p>채팅을 이용하려면 <a href="{{ url_for('login') }}">로그인</a> 해주세요.</p>
-    {% endif %}
-
-    {% for room in chat_rooms %}
-    <div class="room">
-        <a href="{{ url_for('chat', room=room) }}">{{ room }} 채팅방</a>
-        <span class="count">접속자 수: {{ room_users[room] }}</span>
-        <div style="margin-top:6px; color:#333;">
-            현재 접속자: {% if room_user_list[room] %}{{ room_user_list[room] | join(", ") }}{% else %}없음{% endif %}
-        </div>
-    </div>
-    {% endfor %}
+    <h2>채팅방 선택</h2>
+    <ul>
+        {% for room in chat_rooms %}
+            <li>
+                <a href="{{ url_for('chat', room=room) }}">{{ room }}</a>
+                (접속자: {{ room_users[room] }})
+            </li>
+        {% endfor %}
+    </ul>
 </body>
 </html>
