@@ -1,76 +1,118 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8">
-  <title>채팅방</title>
+  <meta charset="utf-8" />
+  <title>채팅 — {{ room }}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    body { font-family: Arial, sans-serif; margin: 0; padding: 0; }
-    .top-bar {
-      background: #007BFF;
-      padding: 10px;
-      color: white;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-    .top-bar a {
-      background: white;
-      color: #007BFF;
-      padding: 6px 12px;
-      border-radius: 5px;
-      text-decoration: none;
-      font-weight: bold;
-    }
-    #chat-box { height: 70vh; overflow-y: auto; border: 1px solid #ccc; padding: 10px; margin: 10px; }
-    #chat-form { display: flex; margin: 10px; }
-    #chat-form input { flex: 1; padding: 8px; }
-    #chat-form button { padding: 8px 15px; }
+    body { font-family: Arial, sans-serif; margin:0; display:flex; flex-direction:column; height:100vh; }
+    .top { padding:12px; background:#fff; display:flex; align-items:center; gap:12px; box-shadow:0 1px 4px rgba(0,0,0,0.06); }
+    .content { flex:1; display:flex; gap:12px; padding:12px; background:#f6f8fa; overflow:hidden; }
+    .left { width:250px; background:#fff; padding:12px; border-radius:8px; overflow:auto; }
+    .chatbox { flex:1; display:flex; flex-direction:column; background:#fff; border-radius:8px; overflow:hidden; }
+    .messages { flex:1; padding:12px; overflow:auto; }
+    .inputbar { display:flex; gap:8px; padding:12px; border-top:1px solid #eee; }
+    input[type="text"] { flex:1; padding:8px; border-radius:6px; border:1px solid #ddd; }
+    button { padding:8px 12px; background:#007bff; color:#fff; border:none; border-radius:6px; cursor:pointer;}
+    .system { color:#666; font-size:13px; margin-bottom:8px; }
+    .msg { margin-bottom:8px; }
+    .nick { font-weight:700; margin-right:6px; }
+    a.btn { display:inline-block; padding:8px 12px; background:#6c757d; color:#fff; border-radius:6px; text-decoration:none; }
   </style>
-  <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
 </head>
 <body>
-  <div class="top-bar">
-    <h3>{{ room }} 채팅방</h3>
-    <a href="{{ url_for('index') }}">메인으로 돌아가기</a>
+  <div class="top">
+    <a class="btn" href="{{ url_for('chat_rooms') }}">방 목록</a>
+    <a class="btn" href="{{ url_for('index') }}">메인으로</a>
+    <h3 style="margin:0 0 0 8px;">채팅: {{ room }}</h3>
   </div>
 
-  <div id="chat-box">
-    {% for msg in messages %}
-      <p><strong>{{ msg.nickname }}:</strong> {{ msg.text }} <small>{{ msg.created_at.strftime("%H:%M:%S") }}</small></p>
-    {% endfor %}
+  <div class="content">
+    <div class="left">
+      <h4>현재 방: {{ room }}</h4>
+      <p>현재 접속자 수는 우측 실시간 목록에서 확인하세요.</p>
+      <p>로그아웃 시 자동 퇴장됩니다.</p>
+    </div>
+
+    <div class="chatbox">
+      <div class="messages" id="messages">
+        <!-- 초기 메시지는 비워둠 (재입장 시 과거 메시지 보이지 않음) -->
+      </div>
+
+      <div class="inputbar">
+        <input id="msgInput" type="text" placeholder="메시지를 입력하세요..." autocomplete="off" />
+        <button id="sendBtn">전송</button>
+        <button id="leaveBtn" style="background:#dc3545;">나가기</button>
+      </div>
+    </div>
   </div>
 
-  <form id="chat-form">
-    <input type="text" id="message" placeholder="메시지를 입력하세요" autocomplete="off">
-    <button type="submit">전송</button>
-  </form>
-
+  <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"
+    integrity="sha384-+EvZJ0QnXk6G9qvH0s5r3cKzJqgqC1qQv0p2jfxlq0rYq4zYc81o4pSmXqjQ2KXl"
+    crossorigin="anonymous"></script>
   <script>
-    const socket = io();
     const room = "{{ room }}";
-    const nickname = "{{ user.nickname }}";
-    const chatBox = document.getElementById("chat-box");
+    const currentNick = "{{ user.nickname if user else '익명' }}";
+    const socket = io({transports:['websocket','polling']});
 
-    socket.emit("join", { room: room, user: nickname });
+    const messagesEl = document.getElementById('messages');
+    const input = document.getElementById('msgInput');
+    const sendBtn = document.getElementById('sendBtn');
+    const leaveBtn = document.getElementById('leaveBtn');
 
-    socket.on("receive_message", (data) => {
-      const p = document.createElement("p");
-      p.innerHTML = `<strong>${data.user}:</strong> ${data.msg} <small>${data.time}</small>`;
-      chatBox.appendChild(p);
-      chatBox.scrollTop = chatBox.scrollHeight;
-    });
-
-    document.getElementById("chat-form").addEventListener("submit", (e) => {
-      e.preventDefault();
-      const msg = document.getElementById("message").value;
-      if (msg.trim() !== "") {
-        socket.emit("send_message", { room: room, msg: msg });
-        document.getElementById("message").value = "";
+    function appendMessage(user, text, time, isSystem=false){
+      const div = document.createElement('div');
+      div.className = isSystem ? 'system' : 'msg';
+      if(isSystem){
+        div.textContent = `[${time}] ${text}`;
+      } else {
+        div.innerHTML = `<span class="nick">[${time}] ${user}:</span> <span>${text}</span>`;
       }
+      messagesEl.appendChild(div);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    socket.on('connect', () => {
+      // join 시 서버에서 세션 유효성 확인(로그인 검사)함
+      socket.emit('join', { room: room });
     });
 
-    window.addEventListener("beforeunload", () => {
-      socket.emit("leave", { room: room, user: nickname });
+    socket.on('receive_message', (data) => {
+      appendMessage(data.user || data.nickname || '익명', data.msg || data.text, data.time || '');
+    });
+
+    socket.on('room_users_update', (payload) => {
+      // 필요시 우측에 접속자 목록 업데이트 가능
+      console.log('room users update', payload);
+    });
+
+    socket.on('auth_required', (d) => {
+      alert(d.msg || '인증 필요');
+      // 인증 필요하면 강제 이동
+      window.location.href = "{{ url_for('login') }}";
+    });
+
+    sendBtn.addEventListener('click', () => {
+      const val = input.value.trim();
+      if(!val) return;
+      socket.emit('send_message', { room: room, msg: val });
+      input.value = '';
+    });
+
+    input.addEventListener('keypress', (e) => {
+      if(e.key === 'Enter'){ sendBtn.click(); }
+    });
+
+    leaveBtn.addEventListener('click', () => {
+      // 서버에 leave 이벤트 전송 후 방 목록으로 이동 (채팅 재입장 시 과거 메시지 안보이게 하려면)
+      socket.emit('leave', { room: room });
+      socket.disconnect();
+      window.location.href = "{{ url_for('chat_rooms') }}";
+    });
+
+    // 페이지 벗어날 때도 leave 전송
+    window.addEventListener('beforeunload', () => {
+      try { socket.emit('leave', { room: room }); } catch(e){}
     });
   </script>
 </body>

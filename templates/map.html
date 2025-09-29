@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8">
-  <title>여행 지도</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="utf-8" />
+  <title>지도 - 인천공항</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link
     rel="stylesheet"
     href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
@@ -11,57 +11,56 @@
     crossorigin=""
   />
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      margin: 0;
-      padding: 0;
+    body { margin:0; font-family: Arial, sans-serif; }
+    #map { height: calc(100vh - 60px); width:100%; }
+    .topbar {
+      height: 60px;
+      display:flex;
+      align-items:center;
+      gap:12px;
+      padding:10px;
+      background:#fff;
+      box-shadow:0 1px 4px rgba(0,0,0,0.08);
     }
-    #map {
-      height: 100vh;
-      width: 100%;
-    }
-    .top-bar {
-      position: absolute;
-      top: 10px;
-      left: 10px;
-      z-index: 1000;
-      background: white;
-      padding: 8px 12px;
-      border-radius: 8px;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-    }
-    .top-bar a {
-      text-decoration: none;
-      color: #007BFF;
-      font-weight: bold;
+    .btn {
+      display:inline-block;
+      padding:8px 12px;
+      background:#007bff;
+      color:#fff;
+      border-radius:6px;
+      text-decoration:none;
     }
   </style>
 </head>
 <body>
-  <div class="top-bar">
-    <a href="{{ url_for('index') }}">메인으로 돌아가기</a>
+  <div class="topbar">
+    <a class="btn" href="{{ url_for('index') }}">돌아가기</a>
+    <h3 style="margin:0;">인천국제공항 위치</h3>
   </div>
   <div id="map"></div>
 
   <script
     src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
     integrity="sha256-o9N1j7kP3sR0kz2j6UktK0v5m4V0vQ5pHd1hUnHEw8M="
-    crossorigin="">
-  </script>
+    crossorigin=""
+  ></script>
   <script>
-    // 지도 기본 위치 (인천국제공항)
-    const map = L.map('map').setView([37.4602, 126.4407], 12);
+    // 인천국제공항 좌표
+    const ICN_LAT = 37.4602;
+    const ICN_LNG = 126.4407;
+    const map = L.map('map').setView([ICN_LAT, ICN_LNG], 13);
 
-    // OSM 타일 불러오기 (무료, 키 필요 없음)
+    // OpenStreetMap tiles
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
       attribution: '© OpenStreetMap'
     }).addTo(map);
 
-    // 마커 추가
-    L.marker([37.4602, 126.4407]).addTo(map)
-      .bindPopup("인천국제공항")
-      .openPopup();
+    // 마커 및 팝업 (구글맵 느낌을 내기 위해 기본 스타일 팝업 사용)
+    const marker = L.marker([ICN_LAT, ICN_LNG]).addTo(map);
+    marker.bindPopup("<b>인천국제공항 (ICN)</b><br>대한민국").openPopup();
+
+    // 기본 줌/이동 컨트롤은 Leaflet에 있음. 필요시 추가 UI 추가 가능.
   </script>
 </body>
 </html>

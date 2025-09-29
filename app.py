@@ -35,7 +35,7 @@ app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
 
 db = SQLAlchemy(app)
-socketio = SocketIO(app, cors_allowed_origins="*")
+socketio = SocketIO(app, cors_allowed_origins="*")  # 필요시 async_mode 지정
 
 # -----------------------------
 # DB 모델
@@ -292,10 +292,11 @@ def chat(room):
         flash("존재하지 않는 채팅방입니다.")
         return redirect(url_for('chat_rooms'))
     user = User.query.get(session['user_id'])
+    # 의도적으로 과거 메시지는 전달하지 않음 (재입장 시 과거 메시지 보이지 않음)
     return render_template('chat.html', messages=[], user=user, room=room)
 
 # -----------------------------
-# 지도 라우트
+# 지도 라우트 (Leaflet, 인천공항 기본 위치)
 # -----------------------------
 @app.route('/map')
 def map_view():
@@ -334,10 +335,12 @@ def convert_currency_api():
             rate = round(data.get("info", {}).get("rate", 0), 6)
             return jsonify({"result": result, "rate": rate})
 
+        # 백업 API
         backup_url = f"https://open.er-api.com/v6/latest/{from_cur}"
         with urllib.request.urlopen(backup_url, timeout=8) as r2:
             data2 = json.loads(r2.read().decode())
 
+        # open.er-api 포맷에 맞춘 처리
         if data2.get("result") == "success" and to_cur in data2.get("rates", {}):
             rate = data2["rates"][to_cur]
             return jsonify({"result": round(amount * rate, 4), "rate": round(rate, 6)})
@@ -364,6 +367,7 @@ def currency_page():
 # -----------------------------
 @socketio.on('join')
 def on_join(data):
+    # 서버에서 로그인 확인 (세션 기반)
     if "user_id" not in session:
         emit('auth_required', {'msg': '로그인이 필요합니다.'})
         disconnect()

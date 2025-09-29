@@ -1,45 +1,35 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="utf-8" />
   <title>채팅방 목록</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    body { font-family: Arial, sans-serif; margin: 0; padding: 0; }
-    .top-bar {
-      background: #007BFF;
-      padding: 10px;
-      color: white;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-    .top-bar a {
-      background: white;
-      color: #007BFF;
-      padding: 6px 12px;
-      border-radius: 5px;
-      text-decoration: none;
-      font-weight: bold;
-    }
-    ul { list-style: none; padding: 20px; }
-    li { margin: 10px 0; }
-    a.room-link { font-size: 18px; text-decoration: none; color: #007BFF; }
+    body { font-family: Arial, sans-serif; padding:20px; background:#f7f7f7; }
+    .wrap { max-width:800px; margin:0 auto; background:#fff; padding:20px; border-radius:8px; box-shadow:0 2px 6px rgba(0,0,0,0.08); }
+    ul { list-style:none; padding:0; margin:0; }
+    li { display:flex; justify-content:space-between; padding:12px; border-bottom:1px solid #eee; }
+    a.room { text-decoration:none; color:#007bff; font-weight:600; }
+    .badge { background:#e9ecef; padding:4px 8px; border-radius:8px; font-size:12px; }
+    a.btn { display:inline-block; padding:8px 12px; background:#6c757d; color:#fff; border-radius:6px; text-decoration:none; margin-bottom:12px; }
   </style>
 </head>
 <body>
-  <div class="top-bar">
-    <h3>채팅방 목록</h3>
-    <a href="{{ url_for('index') }}">메인으로 돌아가기</a>
-  </div>
-
-  <ul>
-    {% for room in chat_rooms %}
+  <a class="btn" href="{{ url_for('index') }}">메인으로 돌아가기</a>
+  <div class="wrap">
+    <h2>채팅방</h2>
+    <ul>
+      {% for room in chat_rooms %}
       <li>
-        <a class="room-link" href="{{ url_for('chat', room=room) }}">
-          {{ room }} ({{ room_users[room] }}명)
-        </a>
+        <div>
+          <a class="room" href="{{ url_for('chat', room=room) }}">{{ room }}</a>
+        </div>
+        <div>
+          <span class="badge">접속: {{ room_users.get(room, 0) }}</span>
+        </div>
       </li>
-    {% endfor %}
-  </ul>
+      {% endfor %}
+    </ul>
+  </div>
 </body>
 </html>
