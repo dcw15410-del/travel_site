@@ -35,7 +35,7 @@ app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
 
 db = SQLAlchemy(app)
-socketio = SocketIO(app, cors_allowed_origins="*")  # async_mode 자동 선택
+socketio = SocketIO(app, cors_allowed_origins="*")
 
 # -----------------------------
 # DB 모델
@@ -292,7 +292,6 @@ def chat(room):
         flash("존재하지 않는 채팅방입니다.")
         return redirect(url_for('chat_rooms'))
     user = User.query.get(session['user_id'])
-    # DB에서 메시지 불러오지 않고 빈 리스트만 전달 (재입장 시 과거 메시지 안 보이게)
     return render_template('chat.html', messages=[], user=user, room=room)
 
 # -----------------------------
@@ -335,7 +334,6 @@ def convert_currency_api():
             rate = round(data.get("info", {}).get("rate", 0), 6)
             return jsonify({"result": result, "rate": rate})
 
-        # 백업 API
         backup_url = f"https://open.er-api.com/v6/latest/{from_cur}"
         with urllib.request.urlopen(backup_url, timeout=8) as r2:
             data2 = json.loads(r2.read().decode())
