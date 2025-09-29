@@ -1,18 +1,45 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-    <meta charset="UTF-8">
-    <title>채팅방 목록</title>
+  <meta charset="UTF-8">
+  <title>채팅방 목록</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; padding: 0; }
+    .top-bar {
+      background: #007BFF;
+      padding: 10px;
+      color: white;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .top-bar a {
+      background: white;
+      color: #007BFF;
+      padding: 6px 12px;
+      border-radius: 5px;
+      text-decoration: none;
+      font-weight: bold;
+    }
+    ul { list-style: none; padding: 20px; }
+    li { margin: 10px 0; }
+    a.room-link { font-size: 18px; text-decoration: none; color: #007BFF; }
+  </style>
 </head>
 <body>
-    <h2>채팅방 선택</h2>
-    <ul>
-        {% for room in chat_rooms %}
-            <li>
-                <a href="{{ url_for('chat', room=room) }}">{{ room }}</a>
-                (접속자: {{ room_users[room] }})
-            </li>
-        {% endfor %}
-    </ul>
+  <div class="top-bar">
+    <h3>채팅방 목록</h3>
+    <a href="{{ url_for('index') }}">메인으로 돌아가기</a>
+  </div>
+
+  <ul>
+    {% for room in chat_rooms %}
+      <li>
+        <a class="room-link" href="{{ url_for('chat', room=room) }}">
+          {{ room }} ({{ room_users[room] }}명)
+        </a>
+      </li>
+    {% endfor %}
+  </ul>
 </body>
 </html>

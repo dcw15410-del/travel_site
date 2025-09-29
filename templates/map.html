@@ -1,37 +1,52 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-    <meta charset="UTF-8">
-    <title>여행 지도</title>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
-    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-    <style>
-        #map { height: 600px; }
-    </style>
+  <meta charset="UTF-8">
+  <title>여행 지도</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; padding: 0; }
+    #map { height: 90vh; width: 100%; }
+    .top-bar {
+      background: #007BFF;
+      padding: 10px;
+      color: white;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .top-bar a {
+      background: white;
+      color: #007BFF;
+      padding: 6px 12px;
+      border-radius: 5px;
+      text-decoration: none;
+      font-weight: bold;
+    }
+  </style>
 </head>
 <body>
-    <h2>세계 여행 지도</h2>
-    <div id="map"></div>
-    <script>
-        var map = L.map('map').setView([37.4602, 126.4407], 6); // 인천국제공항
+  <div class="top-bar">
+    <h3>여행 지도</h3>
+    <a href="{{ url_for('index') }}">메인으로 돌아가기</a>
+  </div>
+  <div id="map"></div>
 
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            maxZoom: 19,
-            attribution: '© OpenStreetMap'
-        }).addTo(map);
-
-        var places = {
-            "한국": [37.5665, 126.9780],
-            "일본": [35.6762, 139.6503],
-            "베트남": [21.0285, 105.8542],
-            "필리핀": [14.5995, 120.9842],
-            "태국": [13.7563, 100.5018]
-        };
-
-        for (var name in places) {
-            var marker = L.marker(places[name]).addTo(map);
-            marker.bindPopup("<b>" + name + "</b>");
-        }
-    </script>
+  <script>
+    function initMap() {
+      const incheon = { lat: 37.4602, lng: 126.4407 };
+      const map = new google.maps.Map(document.getElementById("map"), {
+        zoom: 12,
+        center: incheon,
+      });
+      new google.maps.Marker({
+        position: incheon,
+        map: map,
+        title: "인천국제공항",
+      });
+    }
+  </script>
+  <script async
+    src="https://maps.googleapis.com/maps/api/js?key=YOUR_API_KEY&callback=initMap">
+  </script>
 </body>
 </html>

@@ -1,40 +1,77 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-    <meta charset="UTF-8">
-    <title>{{ room }} 채팅방</title>
-    <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
-    <style>
-        body { font-family: Arial; }
-        #chat { width: 80%; margin: auto; }
-        #messages { border: 1px solid #ccc; height: 400px; overflow-y: scroll; padding: 5px; }
-    </style>
+  <meta charset="UTF-8">
+  <title>채팅방</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; padding: 0; }
+    .top-bar {
+      background: #007BFF;
+      padding: 10px;
+      color: white;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .top-bar a {
+      background: white;
+      color: #007BFF;
+      padding: 6px 12px;
+      border-radius: 5px;
+      text-decoration: none;
+      font-weight: bold;
+    }
+    #chat-box { height: 70vh; overflow-y: auto; border: 1px solid #ccc; padding: 10px; margin: 10px; }
+    #chat-form { display: flex; margin: 10px; }
+    #chat-form input { flex: 1; padding: 8px; }
+    #chat-form button { padding: 8px 15px; }
+  </style>
+  <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
 </head>
 <body>
-    <h2>{{ room }} 채팅방</h2>
-    <div id="chat">
-        <ul id="messages"></ul>
-        <input id="msg" autocomplete="off">
-        <button onclick="sendMessage()">전송</button>
-    </div>
+  <div class="top-bar">
+    <h3>{{ room }} 채팅방</h3>
+    <a href="{{ url_for('index') }}">메인으로 돌아가기</a>
+  </div>
 
-    <script>
-        var socket = io();
-        var room = "{{ room }}";
+  <div id="chat-box">
+    {% for msg in messages %}
+      <p><strong>{{ msg.nickname }}:</strong> {{ msg.text }} <small>{{ msg.created_at.strftime("%H:%M:%S") }}</small></p>
+    {% endfor %}
+  </div>
 
-        socket.emit("join", {room: room, user: "{{ user.nickname }}"});
+  <form id="chat-form">
+    <input type="text" id="message" placeholder="메시지를 입력하세요" autocomplete="off">
+    <button type="submit">전송</button>
+  </form>
 
-        socket.on("receive_message", function(data) {
-            var li = document.createElement("li");
-            li.textContent = "["+data.time+"] "+data.user+": "+data.msg;
-            document.getElementById("messages").appendChild(li);
-        });
+  <script>
+    const socket = io();
+    const room = "{{ room }}";
+    const nickname = "{{ user.nickname }}";
+    const chatBox = document.getElementById("chat-box");
 
-        function sendMessage() {
-            var msg = document.getElementById("msg").value;
-            socket.emit("send_message", {room: room, msg: msg});
-            document.getElementById("msg").value = "";
-        }
-    </script>
+    socket.emit("join", { room: room, user: nickname });
+
+    socket.on("receive_message", (data) => {
+      const p = document.createElement("p");
+      p.innerHTML = `<strong>${data.user}:</strong> ${data.msg} <small>${data.time}</small>`;
+      chatBox.appendChild(p);
+      chatBox.scrollTop = chatBox.scrollHeight;
+    });
+
+    document.getElementById("chat-form").addEventListener("submit", (e) => {
+      e.preventDefault();
+      const msg = document.getElementById("message").value;
+      if (msg.trim() !== "") {
+        socket.emit("send_message", { room: room, msg: msg });
+        document.getElementById("message").value = "";
+      }
+    });
+
+    window.addEventListener("beforeunload", () => {
+      socket.emit("leave", { room: room, user: nickname });
+    });
+  </script>
 </body>
 </html>
