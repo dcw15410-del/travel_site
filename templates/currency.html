@@ -40,11 +40,15 @@
   </div>
 
   <script>
-    document.getElementById('convert').addEventListener('click', async function(){
-      const from = document.getElementById('from').value;
-      const to = document.getElementById('to').value;
-      const amount = document.getElementById('amount').value || '1';
-      const resEl = document.getElementById('resultArea');
+    const fromEl = document.getElementById('from');
+    const toEl = document.getElementById('to');
+    const amountEl = document.getElementById('amount');
+    const resEl = document.getElementById('resultArea');
+
+    async function convertCurrency() {
+      const from = fromEl.value;
+      const to = toEl.value;
+      const amount = amountEl.value || '1';
       resEl.textContent = '계산 중...';
       try {
         const resp = await fetch(`/convert_currency?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&amount=${encodeURIComponent(amount)}`);
@@ -57,7 +61,18 @@
       } catch (e) {
         resEl.textContent = `통신오류: ${e.message}`;
       }
-    });
+    }
+
+    // 버튼 클릭시 변환
+    document.getElementById('convert').addEventListener('click', convertCurrency);
+
+    // 자동 변환: 금액 입력 변경, 통화 선택 변경시 자동 호출
+    amountEl.addEventListener('input', convertCurrency);
+    fromEl.addEventListener('change', convertCurrency);
+    toEl.addEventListener('change', convertCurrency);
+
+    // 페이지 로드 시 초기 변환
+    window.addEventListener('DOMContentLoaded', convertCurrency);
   </script>
 </body>
 </html>
