@@ -3,11 +3,65 @@
 <head>
   <meta charset="UTF-8">
   <title>여행 지도</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-sA+z0ymr06PpI1tFQwJdDPKySx1VHa4cRjD3prZf6vI="
+    crossorigin=""
+  />
   <style>
-    body { margin:0; padding:0; font-family: Arial, sans-serif; }
-    #map { height: 90vh; width: 100%; }
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+    }
+    #map {
+      height: 100vh;
+      width: 100%;
+    }
     .top-bar {
-      background: #007BFF;
-      padding: 10px;
-      color: white;
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      z-index: 1000;
+      background: white;
+      padding: 8px 12px;
+      border-radius: 8px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    }
+    .top-bar a {
+      text-decoration: none;
+      color: #007BFF;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <div class="top-bar">
+    <a href="{{ url_for('index') }}">메인으로 돌아가기</a>
+  </div>
+  <div id="map"></div>
 
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-o9N1j7kP3sR0kz2j6UktK0v5m4V0vQ5pHd1hUnHEw8M="
+    crossorigin="">
+  </script>
+  <script>
+    // 지도 기본 위치 (인천국제공항)
+    const map = L.map('map').setView([37.4602, 126.4407], 12);
+
+    // OSM 타일 불러오기 (무료, 키 필요 없음)
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '© OpenStreetMap'
+    }).addTo(map);
+
+    // 마커 추가
+    L.marker([37.4602, 126.4407]).addTo(map)
+      .bindPopup("인천국제공항")
+      .openPopup();
+  </script>
+</body>
+</html>
