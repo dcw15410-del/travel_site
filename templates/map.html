@@ -4,10 +4,10 @@
   <meta charset="utf-8" />
   <title>지도 - 인천공항</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- Leaflet CSS -->
   <link
     rel="stylesheet"
     href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-    integrity="sha256-sA+z0ymr06PpI1tFQwJdDPKySx1VHa4cRjD3prZf6vI="
     crossorigin=""
   />
   <style>
@@ -39,15 +39,14 @@
   </div>
   <div id="map"></div>
 
-  <script
-    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-    integrity="sha256-o9N1j7kP3sR0kz2j6UktK0v5m4V0vQ5pHd1hUnHEw8M="
-    crossorigin=""
-  ></script>
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <script>
     // 인천국제공항 좌표
     const ICN_LAT = 37.4602;
     const ICN_LNG = 126.4407;
+
+    // 지도 생성
     const map = L.map('map').setView([ICN_LAT, ICN_LNG], 13);
 
     // OpenStreetMap tiles
@@ -56,11 +55,9 @@
       attribution: '© OpenStreetMap'
     }).addTo(map);
 
-    // 마커 및 팝업 (구글맵 느낌을 내기 위해 기본 스타일 팝업 사용)
+    // 마커 및 팝업
     const marker = L.marker([ICN_LAT, ICN_LNG]).addTo(map);
     marker.bindPopup("<b>인천국제공항 (ICN)</b><br>대한민국").openPopup();
-
-    // 기본 줌/이동 컨트롤은 Leaflet에 있음. 필요시 추가 UI 추가 가능.
   </script>
 </body>
 </html>
