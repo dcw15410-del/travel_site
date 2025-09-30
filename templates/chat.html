@@ -52,11 +52,15 @@
   </div>
 
   <!-- Socket.IO 클라이언트 (Flask-SocketIO 호환 v2.3.0) -->
-  <script src="https://cdn.socket.io/2.3.0/socket.io.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/socket.io-client@2.3.0/dist/socket.io.js"></script>
   <script>
     const room = "{{ room }}";
     const currentNick = "{{ user.nickname if user else '익명' }}";
-    const socket = io({transports:['websocket','polling']});
+
+    // Render 배포 환경에서도 동작하도록 현재 origin에 연결
+    const socket = io.connect(location.protocol + '//' + document.domain + (location.port ? ':' + location.port : ''), {
+      transports: ['websocket', 'polling']
+    });
 
     const messagesEl = document.getElementById('messages');
     const input = document.getElementById('msgInput');
