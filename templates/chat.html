@@ -51,9 +51,8 @@
     </div>
   </div>
 
-  <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"
-    integrity="sha384-+EvZJ0QnXk6G9qvH0s5r3cKzJqgqC1qQv0p2jfxlq0rYq4zYc81o4pSmXqjQ2KXl"
-    crossorigin="anonymous"></script>
+  <!-- Socket.IO 클라이언트 (Flask-SocketIO 호환 v2.3.0) -->
+  <script src="https://cdn.socket.io/2.3.0/socket.io.js"></script>
   <script>
     const room = "{{ room }}";
     const currentNick = "{{ user.nickname if user else '익명' }}";
