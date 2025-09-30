@@ -35,7 +35,9 @@ app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
 
 db = SQLAlchemy(app)
-socketio = SocketIO(app, cors_allowed_origins="*")  # 필요시 async_mode 지정
+
+# SocketIO (eventlet 기반)
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
 
 # -----------------------------
 # DB 모델
@@ -137,7 +139,7 @@ def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 # -----------------------------
-# 라우트
+# 라우트 (게시판/회원/구독/지도/환율 등)
 # -----------------------------
 @app.route('/')
 def index():
@@ -210,9 +212,6 @@ def delete_post(post_id):
     flash("게시글이 삭제되었습니다.")
     return redirect(url_for('posts'))
 
-# -----------------------------
-# 회원가입 / 로그인 / 로그아웃
-# -----------------------------
 @app.route('/register', methods=['GET','POST'])
 def register():
     if request.method == 'POST':
@@ -254,9 +253,6 @@ def logout():
     flash("로그아웃되었습니다.")
     return redirect(url_for('index'))
 
-# -----------------------------
-# 구독
-# -----------------------------
 @app.route('/subscribe', methods=['POST'])
 def subscribe():
     email = None
@@ -277,12 +273,8 @@ def subscribe():
         flash("구독이 완료되었습니다.")
     return redirect(request.referrer or url_for('index'))
 
-# -----------------------------
-# 채팅 라우트
-# -----------------------------
 @app.route('/chat')
 def chat_rooms():
-    # 방별 접속자 목록
     room_user_list = {r: [sid_map.get(sid, {}).get('nick','익명') for sid in room_members[r]] for r in CHAT_ROOMS}
     return render_template('chat_rooms.html', room_user_list=room_user_list)
 
@@ -295,19 +287,12 @@ def chat(room):
         flash("존재하지 않는 채팅방입니다.")
         return redirect(url_for('chat_rooms'))
     user = User.query.get(session['user_id'])
-    # 과거 메시지는 불러오지 않음
     return render_template('chat.html', messages=[], user=user, room=room)
 
-# -----------------------------
-# 지도 라우트
-# -----------------------------
 @app.route('/map')
 def map_view():
     return render_template("map.html")
 
-# -----------------------------
-# 환율 계산
-# -----------------------------
 @app.route('/convert_currency')
 def convert_currency_api():
     from_cur = request.args.get("from")
@@ -338,7 +323,6 @@ def convert_currency_api():
             rate = round(data.get("info", {}).get("rate", 0), 6)
             return jsonify({"result": result, "rate": rate})
 
-        # 백업 API
         backup_url = f"https://open.er-api.com/v6/latest/{from_cur}"
         with urllib.request.urlopen(backup_url, timeout=8) as r2:
             data2 = json.loads(r2.read().decode())
@@ -365,7 +349,7 @@ def currency_page():
     return render_template("currency.html", currencies=currencies)
 
 # -----------------------------
-# SocketIO 이벤트 (채팅)
+# SocketIO 이벤트
 # -----------------------------
 @socketio.on('join')
 def on_join(data):
@@ -379,7 +363,6 @@ def on_join(data):
     nickname = user.nickname if user else '익명'
     sid = request.sid
 
-    # 기존 다른 방에서 제거
     prev_info = sid_map.get(sid)
     prev_room = prev_info.get('room') if prev_info else None
     if prev_room and prev_room != room:
@@ -387,7 +370,6 @@ def on_join(data):
             room_members[prev_room].discard(sid)
         sid_map.pop(sid, None)
 
-    # 현재 방에 추가
     room_members.setdefault(room, set()).add(sid)
     sid_map[sid] = {'nick': nickname, 'room': room}
 
@@ -463,4 +445,6 @@ with app.app_context():
 
 if __name__ == '__main__':
     debug_mode = os.environ.get('FLASK_DEBUG', '0') == '1'
+    import eventlet
+    import eventlet.wsgi
     socketio.run(app, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=debug_mode)
