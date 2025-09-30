@@ -81,10 +81,12 @@ TIMEZONE_MAP = {
     "태국": "Asia/Bangkok"
 }
 
-room_members = {room: set() for room in CHAT_ROOMS}
-sid_map = {}
+# 접속 관리용 (실시간 사용자 추적)
+room_members = {room: set() for room in CHAT_ROOMS}  # room → {sid,...}
+sid_map = {}  # sid → {"nick":nickname,"room":room}
 
 def build_room_state_payload():
+    """방별 인원 수와 접속자 목록을 반환"""
     counts = {room: len(room_members.get(room, set())) for room in CHAT_ROOMS}
     lists = {}
     for room in CHAT_ROOMS:
@@ -280,6 +282,7 @@ def subscribe():
 # -----------------------------
 @app.route('/chat')
 def chat_rooms():
+    # 방별 접속자 목록
     room_user_list = {r: [sid_map.get(sid, {}).get('nick','익명') for sid in room_members[r]] for r in CHAT_ROOMS}
     return render_template('chat_rooms.html', room_user_list=room_user_list)
 
@@ -292,11 +295,11 @@ def chat(room):
         flash("존재하지 않는 채팅방입니다.")
         return redirect(url_for('chat_rooms'))
     user = User.query.get(session['user_id'])
-    # 의도적으로 과거 메시지는 전달하지 않음 (재입장 시 과거 메시지 보이지 않음)
+    # 과거 메시지는 불러오지 않음
     return render_template('chat.html', messages=[], user=user, room=room)
 
 # -----------------------------
-# 지도 라우트 (Leaflet, 인천공항 기본 위치)
+# 지도 라우트
 # -----------------------------
 @app.route('/map')
 def map_view():
@@ -340,7 +343,6 @@ def convert_currency_api():
         with urllib.request.urlopen(backup_url, timeout=8) as r2:
             data2 = json.loads(r2.read().decode())
 
-        # open.er-api 포맷에 맞춘 처리
         if data2.get("result") == "success" and to_cur in data2.get("rates", {}):
             rate = data2["rates"][to_cur]
             return jsonify({"result": round(amount * rate, 4), "rate": round(rate, 6)})
@@ -363,11 +365,10 @@ def currency_page():
     return render_template("currency.html", currencies=currencies)
 
 # -----------------------------
-# SocketIO 이벤트
+# SocketIO 이벤트 (채팅)
 # -----------------------------
 @socketio.on('join')
 def on_join(data):
-    # 서버에서 로그인 확인 (세션 기반)
     if "user_id" not in session:
         emit('auth_required', {'msg': '로그인이 필요합니다.'})
         disconnect()
@@ -375,9 +376,10 @@ def on_join(data):
 
     room = data.get('room','한국')
     user = User.query.get(session['user_id'])
-    nickname = user.nickname if user else data.get('user','익명')
+    nickname = user.nickname if user else '익명'
     sid = request.sid
 
+    # 기존 다른 방에서 제거
     prev_info = sid_map.get(sid)
     prev_room = prev_info.get('room') if prev_info else None
     if prev_room and prev_room != room:
@@ -385,6 +387,7 @@ def on_join(data):
             room_members[prev_room].discard(sid)
         sid_map.pop(sid, None)
 
+    # 현재 방에 추가
     room_members.setdefault(room, set()).add(sid)
     sid_map[sid] = {'nick': nickname, 'room': room}
 
@@ -397,7 +400,7 @@ def on_join(data):
 def on_leave(data):
     room = data.get('room','한국')
     user = User.query.get(session['user_id']) if "user_id" in session else None
-    nickname = user.nickname if user else data.get('user','익명')
+    nickname = user.nickname if user else '익명'
     sid = request.sid
 
     if sid in room_members.get(room, set()):
@@ -406,11 +409,11 @@ def on_leave(data):
 
     leave_room(room)
     ts = datetime.now().strftime("%H:%M:%S")
-    emit('receive_message', {'user':'시스템','msg':f'{nickname}님이 퇴장했습니다.', 'time':ts}, room=room)
+    emit('receive_message', {'user':'시스템','msg':f'{nickname}님이 퇴장했습니다.','time':ts}, room=room)
     socketio.emit('room_users_update', build_room_state_payload())
 
 @socketio.on('disconnect')
-def on_disconnect(*args):
+def on_disconnect():
     sid = request.sid
     info = sid_map.pop(sid, None)
     if info:
@@ -431,7 +434,7 @@ def handle_send_message(data):
         return
 
     user = User.query.get(session['user_id'])
-    nickname = user.nickname if user else data.get('user','익명')
+    nickname = user.nickname if user else '익명'
 
     ts = datetime.utcnow()
     try:

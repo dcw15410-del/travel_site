@@ -36,7 +36,7 @@
 
     <div class="chatbox">
       <div class="messages" id="messages">
-        <!-- 초기 메시지는 비워둠 (재입장 시 과거 메시지 보이지 않음) -->
+        <!-- 초기 메시지는 비워둠 -->
       </div>
 
       <div class="inputbar">
@@ -73,29 +73,28 @@
     }
 
     socket.on('connect', () => {
-      // join 시 서버에서 세션 유효성 확인(로그인 검사)함
-      socket.emit('join', { room: room });
+      // join 시 닉네임도 같이 전달  ### 수정됨
+      socket.emit('join', { room: room, user: currentNick });
     });
 
     socket.on('receive_message', (data) => {
-      appendMessage(data.user || data.nickname || '익명', data.msg || data.text, data.time || '');
+      const isSystem = data.user === '시스템';
+      appendMessage(data.user || '익명', data.msg || '', data.time || '', isSystem);
     });
 
     socket.on('room_users_update', (payload) => {
-      // 필요시 우측에 접속자 목록 업데이트 가능
       console.log('room users update', payload);
     });
 
     socket.on('auth_required', (d) => {
       alert(d.msg || '인증 필요');
-      // 인증 필요하면 강제 이동
       window.location.href = "{{ url_for('login') }}";
     });
 
     sendBtn.addEventListener('click', () => {
       const val = input.value.trim();
       if(!val) return;
-      socket.emit('send_message', { room: room, msg: val });
+      socket.emit('send_message', { room: room, msg: val, user: currentNick });  // ### 수정됨
       input.value = '';
     });
 
@@ -104,13 +103,11 @@
     });
 
     leaveBtn.addEventListener('click', () => {
-      // 서버에 leave 이벤트 전송 후 방 목록으로 이동 (채팅 재입장 시 과거 메시지 안보이게 하려면)
       socket.emit('leave', { room: room });
       socket.disconnect();
       window.location.href = "{{ url_for('chat_rooms') }}";
     });
 
-    // 페이지 벗어날 때도 leave 전송
     window.addEventListener('beforeunload', () => {
       try { socket.emit('leave', { room: room }); } catch(e){}
     });
