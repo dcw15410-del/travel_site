@@ -18,6 +18,9 @@
     .msg { margin-bottom:8px; }
     .nick { font-weight:700; margin-right:6px; }
     a.btn { display:inline-block; padding:8px 12px; background:#6c757d; color:#fff; border-radius:6px; text-decoration:none; }
+    ul.user-list { list-style:none; padding:0; margin:8px 0 0 0; }
+    ul.user-list li { padding:4px 0; border-bottom:1px solid #eee; font-size:14px; }
+    ul.user-list li:last-child { border-bottom:none; }
   </style>
 </head>
 <body>
@@ -30,13 +33,14 @@
   <div class="content">
     <div class="left">
       <h4>현재 방: {{ room }}</h4>
-      <p>현재 접속자 수는 우측 실시간 목록에서 확인하세요.</p>
-      <p>로그아웃 시 자동 퇴장됩니다.</p>
+      <p>현재 접속자:</p>
+      <p><strong id="userCount">0</strong> 명</p>
+      <ul id="userList" class="user-list"></ul>
     </div>
 
     <div class="chatbox">
       <div class="messages" id="messages">
-        <!-- 초기 메시지는 비워둠 -->
+        <!-- 메시지 출력 영역 -->
       </div>
 
       <div class="inputbar">
@@ -59,6 +63,8 @@
     const input = document.getElementById('msgInput');
     const sendBtn = document.getElementById('sendBtn');
     const leaveBtn = document.getElementById('leaveBtn');
+    const userCountEl = document.getElementById('userCount');
+    const userListEl = document.getElementById('userList');
 
     function appendMessage(user, text, time, isSystem=false){
       const div = document.createElement('div');
@@ -73,17 +79,21 @@
     }
 
     socket.on('connect', () => {
-      // join 시 닉네임도 같이 전달  ### 수정됨
-      socket.emit('join', { room: room, user: currentNick });
+      socket.emit('join', { room: room });
     });
 
     socket.on('receive_message', (data) => {
-      const isSystem = data.user === '시스템';
-      appendMessage(data.user || '익명', data.msg || '', data.time || '', isSystem);
+      appendMessage(data.user || data.nickname || '익명', data.msg || data.text, data.time || '');
     });
 
     socket.on('room_users_update', (payload) => {
-      console.log('room users update', payload);
+      userCountEl.textContent = payload.count || 0;
+      userListEl.innerHTML = '';
+      (payload.users || []).forEach(u => {
+        const li = document.createElement('li');
+        li.textContent = u;
+        userListEl.appendChild(li);
+      });
     });
 
     socket.on('auth_required', (d) => {
@@ -94,7 +104,7 @@
     sendBtn.addEventListener('click', () => {
       const val = input.value.trim();
       if(!val) return;
-      socket.emit('send_message', { room: room, msg: val, user: currentNick });  // ### 수정됨
+      socket.emit('send_message', { room: room, msg: val });
       input.value = '';
     });
 
