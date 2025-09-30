@@ -83,13 +83,17 @@
     });
 
     socket.on('receive_message', (data) => {
-      appendMessage(data.user || data.nickname || '익명', data.msg || data.text, data.time || '');
+      const user = data.user || data.nickname || '익명';
+      const msg = data.msg || data.text || '';
+      const time = data.time || '';
+      appendMessage(user, msg, time, user === '시스템');
     });
 
     socket.on('room_users_update', (payload) => {
-      userCountEl.textContent = payload.count || 0;
+      if(!payload || !payload.counts || !payload.lists) return;
+      userCountEl.textContent = payload.counts[room] || 0;
       userListEl.innerHTML = '';
-      (payload.users || []).forEach(u => {
+      (payload.lists[room] || []).forEach(u => {
         const li = document.createElement('li');
         li.textContent = u;
         userListEl.appendChild(li);
