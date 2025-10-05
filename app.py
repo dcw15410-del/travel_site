@@ -83,12 +83,10 @@ TIMEZONE_MAP = {
     "태국": "Asia/Bangkok"
 }
 
-# 접속 관리용 (실시간 사용자 추적)
-room_members = {room: set() for room in CHAT_ROOMS}  # room → {sid,...}
-sid_map = {}  # sid → {"nick":nickname,"room":room}
+room_members = {room: set() for room in CHAT_ROOMS}
+sid_map = {}
 
 def build_room_state_payload():
-    """방별 인원 수와 접속자 목록을 반환"""
     counts = {room: len(room_members.get(room, set())) for room in CHAT_ROOMS}
     lists = {}
     for room in CHAT_ROOMS:
@@ -139,7 +137,7 @@ def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 # -----------------------------
-# 라우트 (게시판/회원/구독/지도/환율 등)
+# 라우트
 # -----------------------------
 @app.route('/')
 def index():
@@ -292,52 +290,6 @@ def chat(room):
 @app.route('/map')
 def map_view():
     return render_template("map.html")
-
-@app.route('/convert_currency')
-def convert_currency_api():
-    from_cur = request.args.get("from")
-    to_cur = request.args.get("to")
-    try:
-        amount = float(request.args.get('amount', '1') or '1')
-    except Exception:
-        amount = 1.0
-
-    currencies = {
-        "USD":"미국 달러","KRW":"대한민국 원","JPY":"일본 엔",
-        "EUR":"유로","CNY":"중국 위안","THB":"태국 바트",
-        "VND":"베트남 동","PHP":"필리핀 페소"
-    }
-
-    if not from_cur or not to_cur:
-        return jsonify({"error": "통화 파라미터가 필요합니다."}), 400
-    if from_cur not in currencies or to_cur not in currencies:
-        return jsonify({"error": "지원하지 않는 통화입니다."}), 400
-
-    try:
-        url = f"https://api.exchangerate.host/convert?from={from_cur}&to={to_cur}&amount={amount}"
-        with urllib.request.urlopen(url, timeout=8) as resp:
-            data = json.loads(resp.read().decode())
-
-        if data.get("result") is not None:
-            result = round(data.get("result", 0), 4)
-            rate = round(data.get("info", {}).get("rate", 0), 6)
-            return jsonify({"result": result, "rate": rate})
-
-        backup_url = f"https://open.er-api.com/v6/latest/{from_cur}"
-        with urllib.request.urlopen(backup_url, timeout=8) as r2:
-            data2 = json.loads(r2.read().decode())
-
-        if data2.get("result") == "success" and to_cur in data2.get("rates", {}):
-            rate = data2["rates"][to_cur]
-            return jsonify({"result": round(amount * rate, 4), "rate": round(rate, 6)})
-        if data2.get("rates") and to_cur in data2.get("rates"):
-            rate = data2["rates"][to_cur]
-            return jsonify({"result": round(amount * rate, 4), "rate": round(rate, 6)})
-
-        return jsonify({"error": "환율 계산 실패"}), 500
-    except Exception as e:
-        logger.exception("환율 API 오류")
-        return jsonify({"error": f"서버 오류: {str(e)}"}), 500
 
 @app.route('/currency')
 def currency_page():
