@@ -1,60 +1,133 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-    <meta charset="UTF-8">
-    <title>{{ room }} 채팅방</title>
-    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
-    <style>
-        body { font-family: Arial, sans-serif; background: #fafafa; margin: 0; padding: 0; }
-        .chat-container { max-width: 800px; margin: 40px auto; background: white; border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.1); padding: 20px; }
-        .messages { height: 400px; overflow-y: auto; border: 1px solid #ccc; padding: 10px; background: #f9f9f9; margin-bottom: 10px; }
-        .msg { margin: 5px 0; }
-        .msg b { color: #007BFF; }
-        .input-area { display: flex; }
-        .input-area input { flex: 1; padding: 10px; border: 1px solid #ccc; border-radius: 5px; }
-        .input-area button { margin-left: 10px; padding: 10px 15px; border: none; background: #007BFF; color: white; border-radius: 5px; cursor: pointer; }
-    </style>
+  <meta charset="utf-8" />
+  <title>채팅 — {{ room }}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body { font-family: Arial, sans-serif; margin:0; display:flex; flex-direction:column; height:100vh; }
+    .top { padding:12px; background:#fff; display:flex; align-items:center; gap:12px; box-shadow:0 1px 4px rgba(0,0,0,0.06); }
+    .content { flex:1; display:flex; gap:12px; padding:12px; background:#f6f8fa; overflow:hidden; }
+    .left { width:250px; background:#fff; padding:12px; border-radius:8px; overflow:auto; }
+    .chatbox { flex:1; display:flex; flex-direction:column; background:#fff; border-radius:8px; overflow:hidden; }
+    .messages { flex:1; padding:12px; overflow:auto; }
+    .inputbar { display:flex; gap:8px; padding:12px; border-top:1px solid #eee; }
+    input[type="text"] { flex:1; padding:8px; border-radius:6px; border:1px solid #ddd; }
+    button { padding:8px 12px; background:#007bff; color:#fff; border:none; border-radius:6px; cursor:pointer;}
+    .system { color:#666; font-size:13px; margin-bottom:8px; }
+    .msg { margin-bottom:8px; }
+    .nick { font-weight:700; margin-right:6px; }
+    a.btn { display:inline-block; padding:8px 12px; background:#6c757d; color:#fff; border-radius:6px; text-decoration:none; }
+    ul.user-list { list-style:none; padding:0; margin:8px 0 0 0; }
+    ul.user-list li { padding:4px 0; border-bottom:1px solid #eee; font-size:14px; }
+    ul.user-list li:last-child { border-bottom:none; }
+  </style>
 </head>
 <body>
-<div class="chat-container">
-    <h2>🌏 {{ room }} 채팅방</h2>
-    <div class="messages" id="messages"></div>
+  <div class="top">
+    <a class="btn" href="{{ url_for('chat_rooms') }}">방 목록</a>
+    <a class="btn" href="{{ url_for('index') }}">메인으로</a>
+    <h3 style="margin:0 0 0 8px;">채팅: {{ room }}</h3>
+  </div>
 
-    <div class="input-area">
-        <input type="text" id="msg" placeholder="메시지를 입력하세요..." autocomplete="off">
-        <button id="send">보내기</button>
+  <div class="content">
+    <div class="left">
+      <h4>현재 방: {{ room }}</h4>
+      <p>현재 접속자:</p>
+      <p><strong id="userCount">0</strong> 명</p>
+      <ul id="userList" class="user-list"></ul>
     </div>
-</div>
 
-<script>
-    const socket = io();
+    <div class="chatbox">
+      <div class="messages" id="messages">
+        <!-- 메시지 출력 영역 -->
+      </div>
 
+      <div class="inputbar">
+        <input id="msgInput" type="text" placeholder="메시지를 입력하세요..." autocomplete="off" />
+        <button id="sendBtn">전송</button>
+        <button id="leaveBtn" style="background:#dc3545;">나가기</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Socket.IO 클라이언트 (Flask-SocketIO 호환 v2.3.0) -->
+  <script src="https://cdn.jsdelivr.net/npm/socket.io-client@2.3.0/dist/socket.io.js"></script>
+  <script>
     const room = "{{ room }}";
-    socket.emit("join", {room: room});
+    const currentNick = "{{ user.nickname if user else '익명' }}";
 
-    const msgBox = document.getElementById("messages");
-    const input = document.getElementById("msg");
-    const sendBtn = document.getElementById("send");
-
-    sendBtn.onclick = () => {
-        const text = input.value.trim();
-        if (text) {
-            socket.emit("send_message", {room: room, msg: text});
-            input.value = "";
-        }
-    };
-
-    socket.on("receive_message", data => {
-        const div = document.createElement("div");
-        div.classList.add("msg");
-        div.innerHTML = `<b>${data.user}</b>: ${data.msg} <span style="color:gray; font-size:0.8em;">${data.time}</span>`;
-        msgBox.appendChild(div);
-        msgBox.scrollTop = msgBox.scrollHeight;
+    // Render 배포 환경에서도 동작하도록 현재 origin에 연결
+    const socket = io.connect(location.protocol + '//' + document.domain + (location.port ? ':' + location.port : ''), {
+      transports: ['websocket', 'polling']
     });
 
-    window.addEventListener("beforeunload", () => {
-        socket.emit("leave", {room: room});
+    const messagesEl = document.getElementById('messages');
+    const input = document.getElementById('msgInput');
+    const sendBtn = document.getElementById('sendBtn');
+    const leaveBtn = document.getElementById('leaveBtn');
+    const userCountEl = document.getElementById('userCount');
+    const userListEl = document.getElementById('userList');
+
+    function appendMessage(user, text, time, isSystem=false){
+      const div = document.createElement('div');
+      div.className = isSystem ? 'system' : 'msg';
+      if(isSystem){
+        div.textContent = `[${time}] ${text}`;
+      } else {
+        div.innerHTML = `<span class="nick">[${time}] ${user}:</span> <span>${text}</span>`;
+      }
+      messagesEl.appendChild(div);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    socket.on('connect', () => {
+      socket.emit('join', { room: room });
     });
-</script>
+
+    socket.on('receive_message', (data) => {
+      const user = data.user || data.nickname || '익명';
+      const msg = data.msg || data.text || '';
+      const time = data.time || '';
+      appendMessage(user, msg, time, user === '시스템');
+    });
+
+    socket.on('room_users_update', (payload) => {
+      if(!payload || !payload.counts || !payload.lists) return;
+      userCountEl.textContent = payload.counts[room] || 0;
+      userListEl.innerHTML = '';
+      (payload.lists[room] || []).forEach(u => {
+        const li = document.createElement('li');
+        li.textContent = u;
+        userListEl.appendChild(li);
+      });
+    });
+
+    socket.on('auth_required', (d) => {
+      alert(d.msg || '인증 필요');
+      window.location.href = "{{ url_for('login') }}";
+    });
+
+    sendBtn.addEventListener('click', () => {
+      const val = input.value.trim();
+      if(!val) return;
+      socket.emit('send_message', { room: room, msg: val });
+      input.value = '';
+    });
+
+    input.addEventListener('keypress', (e) => {
+      if(e.key === 'Enter'){ sendBtn.click(); }
+    });
+
+    leaveBtn.addEventListener('click', () => {
+      socket.emit('leave', { room: room });
+      socket.disconnect();
+      window.location.href = "{{ url_for('chat_rooms') }}";
+    });
+
+    window.addEventListener('beforeunload', () => {
+      try { socket.emit('leave', { room: room }); } catch(e){}
+    });
+  </script>
 </body>
 </html>
