@@ -1,9 +1,12 @@
 {% extends "base.html" %}
-{% block title %}게시글 보기{% endblock %}
+{% block title %}{{ post.title }}{% endblock %}
 {% block content %}
-<h2>{{ post.title }}</h2>
-<p>작성자: {{ post.author }} | 작성일: {{ post.created_at.strftime('%Y-%m-%d %H:%M') }}</p>
-<hr>
-<p>{{ post.content }}</p>
-<a href="{{ url_for('posts') }}">← 목록</a>
+<div class="card">
+  <h3>{{ post.title }}</h3>
+  <p><small style="color:#666;">작성일: {{ post.created_at.strftime('%Y-%m-%d %H:%M') }}</small></p>
+  {% if post.image %}
+    <div><img src="{{ url_for('uploaded_file', filename=post.image) }}" alt="image" style="max-width:100%;"></div>
+  {% endif %}
+  <div style="margin-top:12px;">{{ post.content|nl2br }}</div>
+</div>
 {% endblock %}

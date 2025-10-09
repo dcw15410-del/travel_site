@@ -19,7 +19,7 @@ import pytz
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder="static", template_folder="templates")
 app.secret_key = os.environ.get("SECRET_KEY", "change_this_secret_for_production")
 
 # DB 파일 travel_site.db (프로젝트 루트)
@@ -36,8 +36,8 @@ ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
 
 db = SQLAlchemy(app)
 
-# SocketIO: async_mode='threading'로 설정 (외부 의존성 불필요)
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
+# SocketIO (eventlet 권장)
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
 
 # -----------------------------
 # DB 모델
@@ -84,7 +84,7 @@ TIMEZONE_MAP = {
 }
 
 # 접속 관리용 (실시간 사용자 추적)
-room_members = {room: set() for room in CHAT_ROOMS}  # room -> set(sid)
+room_members = {room: set() for room in CHAT_ROOMS}  # room -> set of sids
 sid_map = {}  # sid -> {"nick": nickname, "room": room}
 
 def build_room_state_payload():
@@ -287,7 +287,7 @@ def chat(room):
         flash("존재하지 않는 채팅방입니다.")
         return redirect(url_for('chat_rooms'))
     user = User.query.get(session['user_id'])
-    # 과거 메시지는 불러오지 않음(원하면 여기에 불러오게 추가 가능)
+    # 과거 메시지는 불러오지 않음(요청 시 추가 가능)
     return render_template('chat.html', messages=[], user=user, room=room)
 
 @app.route('/map')
@@ -340,21 +340,11 @@ def convert_currency_api():
         logger.exception("환율 API 오류")
         return jsonify({"error": f"서버 오류: {str(e)}"}), 500
 
-@app.route('/currency')
-def currency_page():
-    currencies = {
-        "USD":"미국 달러","KRW":"대한민국 원","JPY":"일본 엔",
-        "EUR":"유로","CNY":"중국 위안","THB":"태국 바트",
-        "VND":"베트남 동","PHP":"필리핀 페소"
-    }
-    return render_template("currency.html", currencies=currencies)
-
 # -----------------------------
 # SocketIO 이벤트 (채팅)
 # -----------------------------
 @socketio.on('join')
 def on_join(data):
-    # 로그인 확인 (세션 기반)
     if "user_id" not in session:
         emit('auth_required', {'msg': '로그인이 필요합니다.'})
         disconnect()
@@ -447,9 +437,18 @@ with app.app_context():
     db.create_all()
     logger.info(f"DB ensured at {db_path}")
 
+# -----------------------------
+# 실행
+# -----------------------------
 if __name__ == '__main__':
-    # Render 같은 환경에서는 Start command를 "python app.py" 로 설정하세요.
+    # 로컬 개발용: eventlet 사용
     debug_mode = os.environ.get('FLASK_DEBUG', '0') == '1'
-    port = int(os.environ.get('PORT', 5000))
-    # threading 모드의 Flask-SocketIO 에서는 socketio.run을 사용
-    socketio.run(app, host='0.0.0.0', port=port, debug=debug_mode)
+    # eventlet이 설치되어 있으면 monkey_patch 해주면 안정적
+    try:
+        import eventlet
+        eventlet.monkey_patch()
+    except Exception:
+        logger.info("eventlet not available or monkey_patch failed; continuing without it")
+
+    # allow_unsafe_werkzeug=True 는 개발 환경에서만 사용 권장
+    socketio.run(app, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=debug_mode, allow_unsafe_werkzeug=True)

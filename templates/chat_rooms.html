@@ -1,35 +1,25 @@
-<!DOCTYPE html>
-<html lang="ko">
-<head>
-  <meta charset="utf-8" />
-  <title>채팅방 목록</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <style>
-    body { font-family: Arial, sans-serif; padding:20px; background:#f7f7f7; }
-    .wrap { max-width:800px; margin:0 auto; background:#fff; padding:20px; border-radius:8px; box-shadow:0 2px 6px rgba(0,0,0,0.08); }
-    ul { list-style:none; padding:0; margin:0; }
-    li { display:flex; justify-content:space-between; padding:12px; border-bottom:1px solid #eee; }
-    a.room { text-decoration:none; color:#007bff; font-weight:600; }
-    .badge { background:#e9ecef; padding:4px 8px; border-radius:8px; font-size:12px; }
-    a.btn { display:inline-block; padding:8px 12px; background:#6c757d; color:#fff; border-radius:6px; text-decoration:none; margin-bottom:12px; }
-  </style>
-</head>
-<body>
-  <a class="btn" href="{{ url_for('index') }}">메인으로 돌아가기</a>
-  <div class="wrap">
-    <h2>채팅방</h2>
-    <ul>
-      {% for room in chat_rooms %}
-      <li>
-        <div>
-          <a class="room" href="{{ url_for('chat', room=room) }}">{{ room }}</a>
-        </div>
-        <div>
-          <span class="badge">접속: {{ room_users.get(room, 0) }}</span>
-        </div>
-      </li>
+{% extends "base.html" %}
+{% block title %}채팅 방 목록{% endblock %}
+{% block content %}
+<div class="card">
+  <h3>채팅 방 목록</h3>
+  <table style="width:100%; border-collapse:collapse;">
+    <thead><tr><th>방</th><th>현지시간</th><th>접속자수</th><th>접속자</th><th>입장</th></tr></thead>
+    <tbody>
+      {% for r in chat_rooms %}
+      <tr>
+        <td>{{ r }}</td>
+        <td>{{ room_times[r] }}</td>
+        <td>{{ room_users[r] }}</td>
+        <td>
+          {% for u in room_user_list.get(r, []) %}
+            <span style="margin-right:6px;">{{ u }}</span>
+          {% endfor %}
+        </td>
+        <td><a href="{{ url_for('chat', room=r) }}">입장</a></td>
+      </tr>
       {% endfor %}
-    </ul>
-  </div>
-</body>
-</html>
+    </tbody>
+  </table>
+</div>
+{% endblock %}

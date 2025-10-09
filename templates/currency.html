@@ -1,6 +1,46 @@
 {% extends "base.html" %}
-{% block title %}환율{% endblock %}
+{% block title %}환율 계산기{% endblock %}
 {% block content %}
-<h2>환율 정보</h2>
-<p>여기에 환율 API를 연결할 수 있습니다.</p>
+<div class="card" style="max-width:700px;">
+  <h3>환율 계산</h3>
+  <p>간단한 환율 변환 (서버 API 호출)</p>
+  <div>
+    <label>From</label>
+    <select id="from">
+      {% for k,v in currencies.items() %}
+        <option value="{{ k }}">{{ k }} - {{ v }}</option>
+      {% endfor %}
+    </select>
+    <label>To</label>
+    <select id="to">
+      {% for k,v in currencies.items() %}
+        <option value="{{ k }}">{{ k }} - {{ v }}</option>
+      {% endfor %}
+    </select>
+    <label>Amount</label>
+    <input id="amt" type="number" value="1" style="width:100px;">
+    <button id="conv">변환</button>
+  </div>
+  <div id="result" style="margin-top:12px;"></div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+document.getElementById('conv').addEventListener('click', async () => {
+  const from = document.getElementById('from').value;
+  const to = document.getElementById('to').value;
+  const amount = document.getElementById('amt').value || 1;
+  try {
+    const r = await fetch(`/convert_currency?from=${from}&to=${to}&amount=${amount}`);
+    const j = await r.json();
+    if (j.error) {
+      document.getElementById('result').textContent = '오류: ' + j.error;
+    } else {
+      document.getElementById('result').textContent = `${amount} ${from} = ${j.result} ${to} (rate ${j.rate})`;
+    }
+  } catch(e) {
+    document.getElementById('result').textContent = '서버 오류';
+  }
+});
+</script>
 {% endblock %}

@@ -1,19 +1,24 @@
 {% extends "base.html" %}
 {% block title %}게시판{% endblock %}
 {% block content %}
-<h2>게시판</h2>
-{% if 'username' in session %}
-<a href="{{ url_for('new_post') }}">[글쓰기]</a>
-{% endif %}
-<table border="1" width="100%" cellspacing="0" cellpadding="8">
-    <tr><th>ID</th><th>제목</th><th>작성자</th><th>작성일</th></tr>
-    {% for post in posts %}
-    <tr>
-        <td>{{ post.id }}</td>
-        <td><a href="{{ url_for('post_detail', post_id=post.id) }}">{{ post.title }}</a></td>
-        <td>{{ post.author }}</td>
-        <td>{{ post.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
-    </tr>
-    {% endfor %}
-</table>
+<div style="display:flex; gap:12px;">
+  <div style="flex:1;" class="card">
+    <h3>게시글 목록</h3>
+    {% if posts %}
+      <ul>
+        {% for p in posts %}
+          <li>
+            <a href="{{ url_for('post_detail', post_id=p.id) }}">{{ p.title }}</a>
+            <small style="color:#666;"> — {{ p.created_at.strftime('%Y-%m-%d') }}</small>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p>게시물이 없습니다.</p>
+    {% endif %}
+    <div style="margin-top:8px;">
+      <a href="{{ url_for('new_post') }}">새 글 작성</a>
+    </div>
+  </div>
+</div>
 {% endblock %}
