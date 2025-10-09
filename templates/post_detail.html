@@ -1,16 +1,9 @@
 {% extends "base.html" %}
-{% block title %}게시글 상세{% endblock %}
+{% block title %}게시글 보기{% endblock %}
 {% block content %}
 <h2>{{ post.title }}</h2>
-<p>{{ post.created_at.strftime("%Y-%m-%d %H:%M") }}</p>
-{% if post.image %}
-<img src="{{ url_for('static', filename='uploads/' + post.image) }}" alt="Post Image" style="max-width:400px;">
-{% endif %}
+<p>작성자: {{ post.author }} | 작성일: {{ post.created_at.strftime('%Y-%m-%d %H:%M') }}</p>
+<hr>
 <p>{{ post.content }}</p>
-{% if current_user and current_user.id == post.user_id %}
-<form action="{{ url_for('delete_post', post_id=post.id) }}" method="POST">
-    <button type="submit">삭제</button>
-</form>
-{% endif %}
-<button onclick="history.back()">돌아가기</button>
+<a href="{{ url_for('posts') }}">← 목록</a>
 {% endblock %}

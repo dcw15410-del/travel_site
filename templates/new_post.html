@@ -1,12 +1,10 @@
 {% extends "base.html" %}
-{% block title %}새 글 작성{% endblock %}
+{% block title %}글쓰기{% endblock %}
 {% block content %}
 <h2>새 글 작성</h2>
-<form method="POST" enctype="multipart/form-data">
-    <label>제목: <input type="text" name="title"></label><br>
-    <label>내용: <textarea name="content" rows="10"></textarea></label><br>
-    <label>이미지: <input type="file" name="image"></label><br>
-    <button type="submit">작성</button>
+<form method="POST">
+    <input name="title" placeholder="제목" required><br>
+    <textarea name="content" rows="10" placeholder="내용 입력"></textarea><br>
+    <button type="submit">등록</button>
 </form>
-<button onclick="history.back()">돌아가기</button>
 {% endblock %}

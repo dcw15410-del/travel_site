@@ -1,14 +1,6 @@
 {% extends "base.html" %}
 {% block title %}홈{% endblock %}
 {% block content %}
-<h2>최신 게시글</h2>
-<ul>
-    {% for post in posts %}
-    <li>
-        <a href="{{ url_for('post_detail', post_id=post.id) }}">{{ post.title }}</a>
-        <small>{{ post.created_at.strftime("%Y-%m-%d") }}</small>
-    </li>
-    {% endfor %}
-</ul>
-<a href="{{ url_for('posts') }}">전체 게시글 보기</a>
+<h2>환영합니다!</h2>
+<p>자유롭게 여행 정보를 공유하고 대화하세요.</p>
 {% endblock %}

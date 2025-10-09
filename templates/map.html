@@ -1,63 +1,6 @@
-<!DOCTYPE html>
-<html lang="ko">
-<head>
-  <meta charset="utf-8" />
-  <title>지도 - 인천공항</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <!-- Leaflet CSS -->
-  <link
-    rel="stylesheet"
-    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-    crossorigin=""
-  />
-  <style>
-    body { margin:0; font-family: Arial, sans-serif; }
-    #map { height: calc(100vh - 60px); width:100%; }
-    .topbar {
-      height: 60px;
-      display:flex;
-      align-items:center;
-      gap:12px;
-      padding:10px;
-      background:#fff;
-      box-shadow:0 1px 4px rgba(0,0,0,0.08);
-    }
-    .btn {
-      display:inline-block;
-      padding:8px 12px;
-      background:#007bff;
-      color:#fff;
-      border-radius:6px;
-      text-decoration:none;
-    }
-  </style>
-</head>
-<body>
-  <div class="topbar">
-    <a class="btn" href="{{ url_for('index') }}">돌아가기</a>
-    <h3 style="margin:0;">인천국제공항 위치</h3>
-  </div>
-  <div id="map"></div>
-
-  <!-- Leaflet JS -->
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
-  <script>
-    // 인천국제공항 좌표
-    const ICN_LAT = 37.4602;
-    const ICN_LNG = 126.4407;
-
-    // 지도 생성
-    const map = L.map('map').setView([ICN_LAT, ICN_LNG], 13);
-
-    // OpenStreetMap tiles
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19,
-      attribution: '© OpenStreetMap'
-    }).addTo(map);
-
-    // 마커 및 팝업
-    const marker = L.marker([ICN_LAT, ICN_LNG]).addTo(map);
-    marker.bindPopup("<b>인천국제공항 (ICN)</b><br>대한민국").openPopup();
-  </script>
-</body>
-</html>
+{% extends "base.html" %}
+{% block title %}지도{% endblock %}
+{% block content %}
+<h2>지도 페이지</h2>
+<p>여행지 정보를 표시할 수 있는 지도 기능</p>
+{% endblock %}
