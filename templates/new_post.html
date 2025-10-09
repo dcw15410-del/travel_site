@@ -1,13 +1,20 @@
+<!-- templates/new_post.html -->
 {% extends "base.html" %}
+{% block title %}새 글 작성{% endblock %}
 {% block content %}
-<h3>게시판</h3>
-<a href="/write" class="btn btn-secondary mb-3">글쓰기</a>
-<ul class="list-group">
-{% for post in posts %}
-    <li class="list-group-item">
-        <b>{{ post.title }}</b> - {{ post.author }}
-        <div>{{ post.content }}</div>
-    </li>
-{% endfor %}
-</ul>
+  <h2>새 글 작성</h2>
+  <form method="post" enctype="multipart/form-data">
+    <div>
+      <label>제목<br><input name="title" required style="width:100%"></label>
+    </div>
+    <div>
+      <label>이미지 (선택)<br><input type="file" name="image" accept="image/*"></label>
+    </div>
+    <div>
+      <label>내용<br><textarea name="content" rows="8" style="width:100%" required></textarea></label>
+    </div>
+    <div style="margin-top:8px;">
+      <button class="btn" type="submit">등록</button>
+    </div>
+  </form>
 {% endblock %}

@@ -1,44 +1,46 @@
+<!-- templates/currency.html -->
 {% extends "base.html" %}
 {% block title %}환율 계산기{% endblock %}
 {% block content %}
-<div class="card" style="max-width:700px;">
-  <h3>환율 계산</h3>
-  <p>간단한 환율 변환 (서버 API 호출)</p>
-  <div>
-    <label>From</label>
-    <select id="from">
-      {% for k,v in currencies.items() %}
-        <option value="{{ k }}">{{ k }} - {{ v }}</option>
-      {% endfor %}
-    </select>
-    <label>To</label>
-    <select id="to">
-      {% for k,v in currencies.items() %}
-        <option value="{{ k }}">{{ k }} - {{ v }}</option>
-      {% endfor %}
-    </select>
-    <label>Amount</label>
-    <input id="amt" type="number" value="1" style="width:100px;">
-    <button id="conv">변환</button>
-  </div>
+  <h2>환율 계산기</h2>
+  <form id="conv">
+    <label>보낼 통화:
+      <select name="from">
+        {% for code,name in currencies.items() %}
+          <option value="{{ code }}">{{ code }} - {{ name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+
+    <label>받을 통화:
+      <select name="to">
+        {% for code,name in currencies.items() %}
+          <option value="{{ code }}">{{ code }} - {{ name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+
+    <label>금액: <input name="amount" value="1"></label>
+    <button class="btn" type="submit">계산</button>
+  </form>
+
   <div id="result" style="margin-top:12px;"></div>
-</div>
 {% endblock %}
 {% block scripts %}
 <script>
-document.getElementById('conv').addEventListener('click', async () => {
-  const from = document.getElementById('from').value;
-  const to = document.getElementById('to').value;
-  const amount = document.getElementById('amt').value || 1;
-  try {
-    const r = await fetch(`/convert_currency?from=${from}&to=${to}&amount=${amount}`);
-    const j = await r.json();
-    if (j.error) {
-      document.getElementById('result').textContent = '오류: ' + j.error;
-    } else {
-      document.getElementById('result').textContent = `${amount} ${from} = ${j.result} ${to} (rate ${j.rate})`;
+document.getElementById('conv').addEventListener('submit', async function(e){
+  e.preventDefault();
+  const f = new FormData(e.target);
+  const from = f.get('from'), to = f.get('to'), amount = f.get('amount') || 1;
+  const params = new URLSearchParams({from,to,amount});
+  try{
+    const res = await fetch('/convert_currency?' + params.toString());
+    const j = await res.json();
+    if (j.error) document.getElementById('result').textContent = '오류: ' + j.error;
+    else {
+      document.getElementById('result').textContent = `${amount} ${from} = ${j.result} ${to} (rate: ${j.rate})`;
     }
-  } catch(e) {
+  }catch(err){
     document.getElementById('result').textContent = '서버 오류';
   }
 });

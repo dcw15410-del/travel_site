@@ -1,12 +1,14 @@
+<!-- templates/post_detail.html -->
 {% extends "base.html" %}
 {% block title %}{{ post.title }}{% endblock %}
 {% block content %}
-<div class="card">
-  <h3>{{ post.title }}</h3>
-  <p><small style="color:#666;">작성일: {{ post.created_at.strftime('%Y-%m-%d %H:%M') }}</small></p>
+  <h2>{{ post.title }}</h2>
+  <p><small>작성일: {{ post.created_at.strftime("%Y-%m-%d %H:%M") }}</small></p>
   {% if post.image %}
-    <div><img src="{{ url_for('uploaded_file', filename=post.image) }}" alt="image" style="max-width:100%;"></div>
+    <p><img src="{{ url_for('uploaded_file', filename=post.image) }}" style="max-width:400px;"></p>
   {% endif %}
-  <div style="margin-top:12px;">{{ post.content|nl2br }}</div>
-</div>
+  <div>{{ post.content|nl2br }}</div>
+  <form method="post" action="{{ url_for('delete_post', post_id=post.id) }}" onsubmit="return confirm('삭제하시겠습니까?')">
+    <button class="btn" type="submit">삭제</button>
+  </form>
 {% endblock %}

@@ -1,8 +1,10 @@
+<!-- templates/map.html -->
 {% extends "base.html" %}
-{% block title %}지도{% endblock %}
+{% block title %}지도 보기{% endblock %}
 {% block content %}
-<div class="card">
-  <h3>지도</h3>
-  <p>여기에 지도(예: Leaflet, Google Maps)를 넣으시면 됩니다.</p>
-</div>
+  <h2>지도</h2>
+  <p>간단 예시: OpenStreetMap</p>
+  <div style="height:500px;">
+    <iframe src="https://www.openstreetmap.org/export/embed.html" style="width:100%; height:100%; border:1px solid #ccc;"></iframe>
+  </div>
 {% endblock %}

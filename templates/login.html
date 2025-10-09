@@ -1,9 +1,17 @@
+<!-- templates/login.html -->
 {% extends "base.html" %}
+{% block title %}로그인{% endblock %}
 {% block content %}
-<h3>로그인</h3>
-<form method="POST">
-    <input class="form-control mb-2" type="text" name="username" placeholder="아이디" required>
-    <input class="form-control mb-2" type="password" name="password" placeholder="비밀번호" required>
-    <button class="btn btn-primary w-100">로그인</button>
-</form>
+  <h2>로그인</h2>
+  <form method="post" action="{{ url_for('login') }}">
+    <div>
+      <label>아이디<br><input name="username" required></label>
+    </div>
+    <div>
+      <label>비밀번호<br><input name="password" type="password" required></label>
+    </div>
+    <div style="margin-top:8px;">
+      <button class="btn" type="submit">로그인</button>
+    </div>
+  </form>
 {% endblock %}
