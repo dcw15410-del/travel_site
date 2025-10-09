@@ -1,25 +1,37 @@
 {% extends "base.html" %}
-{% block title %}채팅 방 목록{% endblock %}
 {% block content %}
-<div class="card">
-  <h3>채팅 방 목록</h3>
-  <table style="width:100%; border-collapse:collapse;">
-    <thead><tr><th>방</th><th>현지시간</th><th>접속자수</th><th>접속자</th><th>입장</th></tr></thead>
-    <tbody>
-      {% for r in chat_rooms %}
-      <tr>
-        <td>{{ r }}</td>
-        <td>{{ room_times[r] }}</td>
-        <td>{{ room_users[r] }}</td>
-        <td>
-          {% for u in room_user_list.get(r, []) %}
-            <span style="margin-right:6px;">{{ u }}</span>
-          {% endfor %}
-        </td>
-        <td><a href="{{ url_for('chat', room=r) }}">입장</a></td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</div>
+<h3>{{ room }} 채팅방</h3>
+<p>현지 시각: {{ local_time }}</p>
+<div id="chat-box" class="border p-3 mb-3" style="height:300px;overflow-y:scroll;"></div>
+<input id="msg" class="form-control mb-2" placeholder="메시지를 입력하세요">
+<button id="send" class="btn btn-primary w-100">전송</button>
+
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+<script>
+    const socket = io();
+    const username = "{{ session['username'] }}";
+    const room = "{{ room }}";
+
+    socket.emit("join", {username, room});
+
+    socket.on("message", data => {
+        const box = document.getElementById("chat-box");
+        box.innerHTML += `<div>${data.msg}</div>`;
+        box.scrollTop = box.scrollHeight;
+    });
+
+    socket.on("user_count", data => {
+        document.title = `접속자 수: ${data.count}`;
+    });
+
+    document.getElementById("send").onclick = () => {
+        const msg = document.getElementById("msg").value;
+        socket.emit("message", {username, msg, room});
+        document.getElementById("msg").value = "";
+    };
+
+    window.onbeforeunload = () => {
+        socket.emit("leave", {username, room});
+    };
+</script>
 {% endblock %}

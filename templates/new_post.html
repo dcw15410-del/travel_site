@@ -1,13 +1,13 @@
 {% extends "base.html" %}
-{% block title %}새 글 작성{% endblock %}
 {% block content %}
-<div class="card" style="max-width:800px;">
-  <h3>새 글 작성</h3>
-  <form method="post" enctype="multipart/form-data">
-    <div><label>제목</label><br><input type="text" name="title" required style="width:100%; padding:8px;"></div>
-    <div style="margin-top:8px;"><label>내용</label><br><textarea name="content" rows="8" style="width:100%; padding:8px;" required></textarea></div>
-    <div style="margin-top:8px;"><label>이미지 (선택)</label><br><input type="file" name="image" accept="image/*"></div>
-    <div style="margin-top:10px;"><button type="submit">저장</button></div>
-  </form>
-</div>
+<h3>게시판</h3>
+<a href="/write" class="btn btn-secondary mb-3">글쓰기</a>
+<ul class="list-group">
+{% for post in posts %}
+    <li class="list-group-item">
+        <b>{{ post.title }}</b> - {{ post.author }}
+        <div>{{ post.content }}</div>
+    </li>
+{% endfor %}
+</ul>
 {% endblock %}

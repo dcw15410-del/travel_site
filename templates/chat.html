@@ -1,116 +1,12 @@
 {% extends "base.html" %}
-{% block title %}채팅 — {{ room }}{% endblock %}
-{% block head_extra %}
-<style>
-  .content-wrap { display:flex; gap:12px; margin-top:12px; height:70vh; }
-  .left { width:240px; }
-  .chatbox { flex:1; display:flex; flex-direction:column; }
-  .messages { flex:1; background:#fff; border-radius:8px; padding:12px; overflow:auto; box-shadow:0 1px 4px rgba(0,0,0,0.06); }
-  .inputbar { display:flex; gap:8px; margin-top:8px; }
-  .system { color:#666; font-size:13px; margin-bottom:8px; }
-  .msg { margin-bottom:8px; }
-  .nick { font-weight:700; margin-right:6px; }
-</style>
-{% endblock %}
 {% block content %}
-<div class="content-wrap">
-  <div class="left card">
-    <h4>현재 방: {{ room }}</h4>
-    <p>현재 접속자: <strong id="userCount">0</strong> 명</p>
-    <ul id="userList" style="list-style:none; padding:0;"></ul>
-  </div>
-
-  <div class="chatbox">
-    <div id="messages" class="messages"></div>
-    <div class="inputbar">
-      <input id="msgInput" type="text" placeholder="메시지를 입력하세요..." style="flex:1; padding:8px; border-radius:6px; border:1px solid #ddd;">
-      <button id="sendBtn" style="padding:8px 12px; background:#007bff; color:#fff; border:none; border-radius:6px;">전송</button>
-      <button id="leaveBtn" style="padding:8px 12px; background:#dc3545; color:#fff; border:none; border-radius:6px;">나가기</button>
-    </div>
-  </div>
-</div>
-{% endblock %}
-
-{% block scripts %}
-<!-- socket.io client v4 (서버 python-socketio v5 호환) -->
-<script src="https://cdn.socket.io/4.6.1/socket.io.min.js" integrity="sha384-+EvZJ0QnXk6G9qvH0s5r3cKzJqgqC1qQv0p2jfxlq0rYq4zYc81o4pSmXqjQ2KXl" crossorigin="anonymous"></script>
-<script>
-  const room = "{{ room }}";
-  const currentNick = "{{ user.nickname if user else '익명' }}";
-
-  // 기본적으로 동일 origin을 사용 - 배포 환경(https)에서도 작동
-  const socket = io({transports:['websocket','polling']});
-
-  const messagesEl = document.getElementById('messages');
-  const input = document.getElementById('msgInput');
-  const sendBtn = document.getElementById('sendBtn');
-  const leaveBtn = document.getElementById('leaveBtn');
-  const userCountEl = document.getElementById('userCount');
-  const userListEl = document.getElementById('userList');
-
-  function appendMessage(user, text, time, isSystem=false){
-    const div = document.createElement('div');
-    div.className = isSystem ? 'system' : 'msg';
-    if(isSystem){
-      div.textContent = `[${time}] ${text}`;
-    } else {
-      div.innerHTML = `<span class="nick">[${time}] ${user}:</span> <span>${text}</span>`;
-    }
-    messagesEl.appendChild(div);
-    messagesEl.scrollTop = messagesEl.scrollHeight;
-  }
-
-  socket.on('connect', () => {
-    console.info('socket connected', socket.id);
-    socket.emit('join', { room: room });
-  });
-
-  socket.on('receive_message', (data) => {
-    const user = data.user || data.nickname || '익명';
-    const msg = data.msg || data.text || '';
-    const time = data.time || '';
-    appendMessage(user, msg, time, user === '시스템');
-  });
-
-  socket.on('room_users_update', (payload) => {
-    if(!payload || !payload.counts || !payload.lists) return;
-    userCountEl.textContent = payload.counts[room] || 0;
-    userListEl.innerHTML = '';
-    (payload.lists[room] || []).forEach(u => {
-      const li = document.createElement('li');
-      li.textContent = u;
-      userListEl.appendChild(li);
-    });
-  });
-
-  socket.on('auth_required', (d) => {
-    alert(d.msg || '인증 필요');
-    window.location.href = "{{ url_for('login') }}";
-  });
-
-  socket.on('disconnect', (reason) => {
-    console.info('socket disconnected', reason);
-  });
-
-  sendBtn.addEventListener('click', () => {
-    const val = input.value.trim();
-    if(!val) return;
-    socket.emit('send_message', { room: room, msg: val });
-    input.value = '';
-  });
-
-  input.addEventListener('keypress', (e) => {
-    if(e.key === 'Enter'){ sendBtn.click(); }
-  });
-
-  leaveBtn.addEventListener('click', () => {
-    socket.emit('leave', { room: room });
-    socket.disconnect();
-    window.location.href = "{{ url_for('chat_rooms') }}";
-  });
-
-  window.addEventListener('beforeunload', () => {
-    try { socket.emit('leave', { room: room }); } catch(e){}
-  });
-</script>
+<h3>나라별 채팅방 목록</h3>
+<ul class="list-group">
+{% for room in rooms %}
+    <li class="list-group-item d-flex justify-content-between align-items-center">
+        <a href="/chat/{{ room.name }}">{{ room.name }} 채팅방</a>
+        <small>{{ room.timezone }}</small>
+    </li>
+{% endfor %}
+</ul>
 {% endblock %}

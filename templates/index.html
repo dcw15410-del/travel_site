@@ -1,16 +1,7 @@
 {% extends "base.html" %}
-{% block title %}홈 - 여행 사이트{% endblock %}
 {% block content %}
-<div class="card">
-  <h3>최신 게시물</h3>
-  {% if posts %}
-    <ul>
-      {% for p in posts %}
-        <li><a href="{{ url_for('post_detail', post_id=p.id) }}">{{ p.title }}</a> — {{ p.created_at.strftime('%Y-%m-%d') }}</li>
-      {% endfor %}
-    </ul>
-  {% else %}
-    <p>등록된 게시물이 없습니다.</p>
-  {% endif %}
+<div class="text-center">
+    <h2>🌏 여행 정보 & 실시간 채팅 커뮤니티</h2>
+    <p>각 나라별 채팅방에 입장해 현지인과 대화해보세요!</p>
 </div>
 {% endblock %}

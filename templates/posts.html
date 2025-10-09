@@ -1,24 +1,9 @@
 {% extends "base.html" %}
-{% block title %}게시판{% endblock %}
 {% block content %}
-<div style="display:flex; gap:12px;">
-  <div style="flex:1;" class="card">
-    <h3>게시글 목록</h3>
-    {% if posts %}
-      <ul>
-        {% for p in posts %}
-          <li>
-            <a href="{{ url_for('post_detail', post_id=p.id) }}">{{ p.title }}</a>
-            <small style="color:#666;"> — {{ p.created_at.strftime('%Y-%m-%d') }}</small>
-          </li>
-        {% endfor %}
-      </ul>
-    {% else %}
-      <p>게시물이 없습니다.</p>
-    {% endif %}
-    <div style="margin-top:8px;">
-      <a href="{{ url_for('new_post') }}">새 글 작성</a>
-    </div>
-  </div>
-</div>
+<h3>글쓰기</h3>
+<form method="POST">
+    <input class="form-control mb-2" name="title" placeholder="제목">
+    <textarea class="form-control mb-2" name="content" rows="5" placeholder="내용"></textarea>
+    <button class="btn btn-primary w-100">등록</button>
+</form>
 {% endblock %}
