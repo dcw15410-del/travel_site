@@ -1,41 +1,150 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8">
-  <title>채팅방</title>
-  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+  <meta charset="utf-8" />
+  <title>채팅 — {{ room }}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body { font-family: Arial, sans-serif; margin:0; display:flex; flex-direction:column; height:100vh; }
+    .top { padding:12px; background:#fff; display:flex; align-items:center; gap:12px; box-shadow:0 1px 4px rgba(0,0,0,0.06); }
+    .content { flex:1; display:flex; gap:12px; padding:12px; background:#f6f8fa; overflow:hidden; }
+    .left { width:250px; background:#fff; padding:12px; border-radius:8px; overflow:auto; }
+    .chatbox { flex:1; display:flex; flex-direction:column; background:#fff; border-radius:8px; overflow:hidden; }
+    .messages { flex:1; padding:12px; overflow:auto; }
+    .inputbar { display:flex; gap:8px; padding:12px; border-top:1px solid #eee; }
+    input[type="text"] { flex:1; padding:8px; border-radius:6px; border:1px solid #ddd; }
+    button { padding:8px 12px; background:#007bff; color:#fff; border:none; border-radius:6px; cursor:pointer;}
+    .system { color:#666; font-size:13px; margin-bottom:8px; }
+    .msg { margin-bottom:8px; }
+    .nick { font-weight:700; margin-right:6px; }
+    a.btn { display:inline-block; padding:8px 12px; background:#6c757d; color:#fff; border-radius:6px; text-decoration:none; }
+    ul.user-list { list-style:none; padding:0; margin:8px 0 0 0; }
+    ul.user-list li { padding:4px 0; border-bottom:1px solid #eee; font-size:14px; }
+    ul.user-list li:last-child { border-bottom:none; }
+  </style>
 </head>
 <body>
-  <h2>채팅방 - {{ username }}</h2>
-  <div id="chat-box" style="border:1px solid #ccc; height:300px; overflow:auto; padding:10px;">
-    {% for msg in messages %}
-      <p><strong>{{ msg.username }}:</strong> {{ msg.content }}</p>
-    {% endfor %}
+  <div class="top">
+    <a class="btn" href="{{ url_for('chat_rooms') }}">방 목록</a>
+    <a class="btn" href="{{ url_for('index') }}">메인으로</a>
+    <h3 style="margin:0 0 0 8px;">채팅: {{ room }}</h3>
   </div>
-  <form id="chat-form">
-    <input id="message" placeholder="메시지를 입력하세요" autocomplete="off" />
-    <button type="submit">전송</button>
-  </form>
+
+  <div class="content">
+    <div class="left">
+      <h4>현재 방: {{ room }}</h4>
+      <p>현재 접속자:</p>
+      <p><strong id="userCount">0</strong> 명</p>
+      <ul id="userList" class="user-list"></ul>
+      <hr />
+      <p>현지시각: <span id="localTime">{{ room_times.get(room, "") }}</span></p>
+    </div>
+
+    <div class="chatbox">
+      <div class="messages" id="messages">
+        <!-- 메시지 출력 영역 -->
+      </div>
+
+      <div class="inputbar">
+        <input id="msgInput" type="text" placeholder="메시지를 입력하세요..." autocomplete="off" />
+        <button id="sendBtn">전송</button>
+        <button id="leaveBtn" style="background:#dc3545;">나가기</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- socket.io v4 클라이언트 (CDN) -->
+  <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"
+    integrity="sha384-+EvZJ0QnXk6G9qvH0s5r3cKzJqgqC1qQv0p2jfxlq0rYq4zYc81o4pSmXqjQ2KXl"
+    crossorigin="anonymous"></script>
 
   <script>
-    const socket = io({ transports: ['websocket'] });
+    // 서버와 호환 문제를 피하기 위해 polling 만 사용
+    const socket = io({transports:['polling']});
 
-    socket.on('receive_message', (data) => {
-      const chatBox = document.getElementById('chat-box');
-      const p = document.createElement('p');
-      p.innerHTML = `<strong>${data.username}:</strong> ${data.message}`;
-      chatBox.appendChild(p);
-      chatBox.scrollTop = chatBox.scrollHeight;
+    const room = "{{ room }}";
+    const currentNick = "{{ user.nickname if user else '익명' }}";
+
+    const messagesEl = document.getElementById('messages');
+    const input = document.getElementById('msgInput');
+    const sendBtn = document.getElementById('sendBtn');
+    const leaveBtn = document.getElementById('leaveBtn');
+    const userCountEl = document.getElementById('userCount');
+    const userListEl = document.getElementById('userList');
+    const localTimeEl = document.getElementById('localTime');
+
+    function appendMessage(user, text, time, isSystem=false){
+      const div = document.createElement('div');
+      div.className = isSystem ? 'system' : 'msg';
+      if(isSystem){
+        div.textContent = `[${time}] ${text}`;
+      } else {
+        div.innerHTML = `<span class="nick">[${time}] ${user}:</span> <span>${text}</span>`;
+      }
+      messagesEl.appendChild(div);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    socket.on('connect', () => {
+      // join 이벤트로 방 입장
+      socket.emit('join', { room: room });
     });
 
-    document.getElementById('chat-form').onsubmit = (e) => {
-      e.preventDefault();
-      const msg = document.getElementById('message').value.trim();
-      if (msg !== '') {
-        socket.emit('send_message', { message: msg });
-        document.getElementById('message').value = '';
-      }
-    };
+    socket.on('receive_message', (data) => {
+      const user = data.user || data.nickname || '익명';
+      const msg = data.msg || data.text || '';
+      const time = data.time || '';
+      appendMessage(user, msg, time, user === '시스템');
+    });
+
+    socket.on('room_users_update', (payload) => {
+      if(!payload || !payload.counts || !payload.lists) return;
+      userCountEl.textContent = payload.counts[room] || 0;
+      userListEl.innerHTML = '';
+      (payload.lists[room] || []).forEach(u => {
+        const li = document.createElement('li');
+        li.textContent = u;
+        userListEl.appendChild(li);
+      });
+    });
+
+    socket.on('auth_required', (d) => {
+      alert(d.msg || '인증 필요');
+      window.location.href = "{{ url_for('login') }}";
+    });
+
+    sendBtn.addEventListener('click', () => {
+      const val = input.value.trim();
+      if(!val) return;
+      socket.emit('send_message', { room: room, msg: val });
+      input.value = '';
+    });
+
+    input.addEventListener('keypress', (e) => {
+      if(e.key === 'Enter'){ sendBtn.click(); }
+    });
+
+    leaveBtn.addEventListener('click', () => {
+      socket.emit('leave', { room: room });
+      try { socket.disconnect(); } catch(e){}
+      window.location.href = "{{ url_for('chat_rooms') }}";
+    });
+
+    // 페이지 떠날 때 서버에 leave 시도
+    window.addEventListener('beforeunload', () => {
+      try { socket.emit('leave', { room: room }); } catch(e){}
+    });
+
+    // 주기적으로 현지시간 갱신 (클라이언트 표시용)
+    setInterval(() => {
+      // 서버에서 템플릿으로 전달한 room_times는 렌더 시점 값이므로,
+      // 클라이언트 측에서 간단히 현재 로컬 브라우저 시간을 표시합니다.
+      const now = new Date();
+      const hh = String(now.getHours()).padStart(2,'0');
+      const mm = String(now.getMinutes()).padStart(2,'0');
+      const ss = String(now.getSeconds()).padStart(2,'0');
+      localTimeEl.textContent = `${hh}:${mm}:${ss}`;
+    }, 1000);
   </script>
 </body>
 </html>
