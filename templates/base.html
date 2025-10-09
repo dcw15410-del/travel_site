@@ -1,58 +1,27 @@
-<!-- templates/base.html -->
-<!doctype html>
+<!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>{% block title %}Travel Site{% endblock %}</title>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/modern-normalize/1.1.0/modern-normalize.min.css">
-  <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", Roboto, Arial; padding: 12px; }
-    header { display:flex; gap:12px; align-items:center; margin-bottom:16px; }
-    nav a { margin-right:8px; text-decoration:none; color:#0366d6; }
-    .container { max-width:1100px; margin:0 auto; }
-    .flash { background:#fffbdd; border:1px solid #ffe08a; padding:8px; margin-bottom:8px; }
-    .btn { padding:6px 10px; border-radius:6px; border:1px solid #ccc; background:#f4f4f4; cursor:pointer; }
-    footer { margin-top:40px; color:#666; font-size:14px; }
-  </style>
-  {% block head %}{% endblock %}
+  <meta charset="UTF-8">
+  <title>여행 커뮤니티</title>
+  <link rel="stylesheet" href="https://cdn.simplecss.org/simple.min.css">
 </head>
 <body>
-  <div class="container">
-    <header>
-      <h1><a href="{{ url_for('index') }}">여행커뮤니티</a></h1>
-      <nav>
-        <a href="{{ url_for('index') }}">홈</a>
-        <a href="{{ url_for('posts') }}">게시판</a>
-        <a href="{{ url_for('chat_rooms') }}">채팅</a>
-        <a href="{{ url_for('currency_page') }}">환율</a>
-        <a href="{{ url_for('map_view') }}">지도</a>
-      </nav>
-      <div style="margin-left:auto;">
-        {% if current_user %}
-          안녕하세요, {{ current_user.nickname }} |
-          <a href="{{ url_for('logout') }}">로그아웃</a>
-        {% else %}
-          <a href="{{ url_for('login') }}">로그인</a> |
-          <a href="{{ url_for('register') }}">회원가입</a>
-        {% endif %}
-      </div>
-    </header>
-
-    {% with messages = get_flashed_messages() %}
-      {% if messages %}
-        <div class="flash">
-          {% for m in messages %} <div>{{ m }}</div> {% endfor %}
-        </div>
-      {% endif %}
-    {% endwith %}
-
-    {% block content %}{% endblock %}
-
-    <footer>
-      <small>예시 프로젝트 — 채팅, 게시판, 환율, 지도 포함</small>
-    </footer>
-  </div>
-  {% block scripts %}{% endblock %}
+<header>
+  <h2><a href="{{ url_for('index') }}">🏝 여행 커뮤니티</a></h2>
+  <nav>
+    {% if 'username' in session %}
+      <a href="{{ url_for('chat_rooms') }}">채팅방</a>
+      <a href="{{ url_for('currency') }}">환율</a>
+      <a href="{{ url_for('map_view') }}">지도</a>
+      <a href="{{ url_for('logout') }}">로그아웃 ({{ session['username'] }})</a>
+    {% else %}
+      <a href="{{ url_for('login') }}">로그인</a>
+      <a href="{{ url_for('register') }}">회원가입</a>
+    {% endif %}
+  </nav>
+</header>
+<main>
+  {% block content %}{% endblock %}
+</main>
 </body>
 </html>

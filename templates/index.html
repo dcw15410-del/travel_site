@@ -1,16 +1,11 @@
-<!-- templates/index.html -->
 {% extends "base.html" %}
-{% block title %}홈 - 여행커뮤니티{% endblock %}
 {% block content %}
-  <h2>최신 글</h2>
-  {% if posts %}
-    <ul>
-      {% for p in posts %}
-        <li><a href="{{ url_for('post_detail', post_id=p.id) }}">{{ p.title }}</a> - {{ p.created_at.strftime("%Y-%m-%d") }}</li>
-      {% endfor %}
-    </ul>
-    <p><a href="{{ url_for('posts') }}">전체 게시판 보기</a></p>
-  {% else %}
-    <p>등록된 글이 없습니다.</p>
-  {% endif %}
+<h2>🌏 여행자 커뮤니티에 오신 것을 환영합니다!</h2>
+<p>로그인하면 실시간 채팅, 환율 계산, 세계 지도 기능을 이용할 수 있습니다.</p>
+
+{% if 'username' in session %}
+  <a href="{{ url_for('chat_rooms') }}">채팅방으로 이동</a>
+{% else %}
+  <a href="{{ url_for('login') }}">로그인하기</a>
+{% endif %}
 {% endblock %}

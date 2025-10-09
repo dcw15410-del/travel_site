@@ -1,15 +1,12 @@
-<!-- templates/chat_rooms.html -->
 {% extends "base.html" %}
-{% block title %}채팅방 목록{% endblock %}
 {% block content %}
-  <h2>채팅방 목록</h2>
-  <ul>
-    {% for room in chat_rooms %}
-      <li>
-        <strong><a href="{{ url_for('chat', room=room) }}">{{ room }}</a></strong>
-        - 현지시간: {{ room_times[room] }}
-        - 접속자: {{ room_users[room] }}
-      </li>
-    {% endfor %}
-  </ul>
+<h2>🌍 채팅방 목록</h2>
+<ul>
+{% for r in rooms %}
+  <li>
+    <a href="{{ url_for('chat', room=r.name) }}">{{ r.name }} 채팅방</a>
+    <small>(현지시각: {{ r.local_time }})</small>
+  </li>
+{% endfor %}
+</ul>
 {% endblock %}

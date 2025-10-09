@@ -1,106 +1,36 @@
-<!-- templates/chat.html -->
 {% extends "base.html" %}
-{% block title %}채팅 - {{ room }}{% endblock %}
-{% block head %}
-  <style>
-    .chat-wrap { display:flex; gap:12px; }
-    .sidebar { width:260px; border-right:1px solid #ddd; padding:12px; }
-    .main { flex:1; padding:12px; display:flex; flex-direction:column; height:70vh; }
-    .messages { flex:1; overflow:auto; border:1px solid #eee; padding:8px; background:#fafafa; }
-    .input-area { margin-top:8px; display:flex; gap:8px; }
-    .input-area input[type=text] { flex:1; padding:8px; }
-    .user-list { margin-top:8px; font-size:14px; color:#444; }
-  </style>
-{% endblock %}
-
 {% block content %}
-  <h2>채팅 — {{ room }}</h2>
-  <div class="chat-wrap">
-    <div class="sidebar">
-      <p>현재 방: <strong>{{ room }}</strong></p>
-      <p>현지시간: {{ room_times[room] }}</p>
-      <p>접속자 수: <span id="count">0</span></p>
-      <div class="user-list" id="users"></div>
-      <p style="margin-top:12px;"><a href="{{ url_for('chat_rooms') }}">목록으로</a></p>
-    </div>
+<h2>{{ room }} 채팅방</h2>
+<div id="chat-box" style="border:1px solid #ccc;height:300px;overflow-y:scroll;padding:10px;">
+  {% for msg in messages %}
+    <p><b>{{ msg.username }}:</b> {{ msg.content }}</p>
+  {% endfor %}
+</div>
 
-    <div class="main">
-      <div class="messages" id="messages">
-        {% for m in messages %}
-          <div><strong>{{ m.nickname }}:</strong> {{ m.text }} <small style="color:#666">({{ m.created_at.strftime("%H:%M:%S") }})</small></div>
-        {% endfor %}
-      </div>
+<input id="msg" placeholder="메시지를 입력하세요" style="width:80%;">
+<button onclick="sendMsg()">전송</button>
 
-      <div class="input-area">
-        <input id="msg" type="text" placeholder="메시지를 입력하세요..." autocomplete="off">
-        <button id="send" class="btn">전송</button>
-      </div>
-    </div>
-  </div>
-{% endblock %}
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+<script>
+const socket = io();
+const username = "{{ username }}";
+const room = "{{ room }}";
 
-{% block scripts %}
-  <!-- socket.io client v4 (서버 package 버전과 맞춰주세요) -->
-  <script src="https://cdn.socket.io/4.6.1/socket.io.min.js" integrity crossorigin="anonymous"></script>
-  <script>
-    (function(){
-      const ROOM = "{{ room }}";
-      const NICK = "{{ user.nickname if user else '익명' }}";
-      // 연결: 서버 주소를 명시하지 않으면 현재 호스트로 연결합니다.
-      const socket = io({ transports: ["websocket","polling"] });
+socket.emit("join", {username, room});
 
-      const messagesEl = document.getElementById('messages');
-      const usersEl = document.getElementById('users');
-      const countEl = document.getElementById('count');
+socket.on("receive_message", data => {
+  document.getElementById("chat-box").innerHTML += `<p><b>${data.username}:</b> ${data.msg}</p>`;
+});
 
-      function addMessage(user, msg, time) {
-        const div = document.createElement('div');
-        div.innerHTML = `<strong>${escapeHtml(user)}:</strong> ${escapeHtml(msg)} <small style="color:#666">(${escapeHtml(time)})</small>`;
-        messagesEl.appendChild(div);
-        messagesEl.scrollTop = messagesEl.scrollHeight;
-      }
+socket.on("status", data => {
+  document.getElementById("chat-box").innerHTML += `<p><i>${data.msg}</i></p>`;
+});
 
-      function updateRoomState(payload) {
-        const counts = payload.counts || {};
-        const lists = payload.lists || {};
-        countEl.textContent = counts[ROOM] || 0;
-        const list = lists[ROOM] || [];
-        usersEl.innerHTML = list.map(n => `<div>• ${escapeHtml(n)}</div>`).join('');
-      }
-
-      socket.on('connect', () => {
-        console.log('socket connected', socket.id);
-        socket.emit('join', { room: ROOM });
-      });
-
-      socket.on('receive_message', (d) => {
-        addMessage(d.user, d.msg, d.time || '');
-      });
-
-      socket.on('room_users_update', (payload) => {
-        updateRoomState(payload);
-      });
-
-      socket.on('auth_required', (d) => {
-        alert(d.msg || '로그인이 필요합니다.');
-        location.href = "{{ url_for('login') }}";
-      });
-
-      document.getElementById('send').addEventListener('click', sendMsg);
-      document.getElementById('msg').addEventListener('keydown', function(e){
-        if (e.key === 'Enter') sendMsg();
-      });
-
-      function sendMsg(){
-        const txt = document.getElementById('msg').value.trim();
-        if (!txt) return;
-        socket.emit('send_message', { room: ROOM, msg: txt });
-        document.getElementById('msg').value = '';
-      }
-
-      function escapeHtml(s){
-        return (s+'').replace(/[&<>"']/g, function(m){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[m]; });
-      }
-    })();
-  </script>
+function sendMsg() {
+  const msg = document.getElementById("msg").value;
+  if (msg.trim() === "") return;
+  socket.emit("send_message", {username, room, msg});
+  document.getElementById("msg").value = "";
+}
+</script>
 {% endblock %}
