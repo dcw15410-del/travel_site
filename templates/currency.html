@@ -1,13 +1,35 @@
 {% extends "base.html" %}
+{% block title %}환율 계산기{% endblock %}
 {% block content %}
-<h3>💱 환율 계산기</h3>
-<form method="POST">
-  <input type="text" name="from_currency" placeholder="FROM (예: USD)" required>
-  <input type="text" name="to_currency" placeholder="TO (예: KRW)" required>
-  <input type="number" name="amount" placeholder="금액" required>
-  <button type="submit">계산</button>
-</form>
-{% if result %}
-<p>{{ amount }} {{ from_currency }} = {{ result }} {{ to_currency }}</p>
-{% endif %}
+<div class="card" style="max-width:600px;margin:0 auto;">
+  <h3>환율 계산기</h3>
+  <form id="convForm" onsubmit="return false;">
+    <div>
+      <select id="fromCur">
+        {% for k,v in currencies.items() %}<option value="{{ k }}">{{ k }} - {{ v }}</option>{% endfor %}
+      </select>
+      →
+      <select id="toCur">
+        {% for k,v in currencies.items() %}<option value="{{ k }}">{{ k }} - {{ v }}</option>{% endfor %}
+      </select>
+    </div>
+    <div><input id="amount" value="1" type="number" step="any"></div>
+    <div style="margin-top:8px;"><button id="convBtn">계산</button></div>
+  </form>
+  <div id="result" style="margin-top:12px;"></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('convBtn').addEventListener('click', async () => {
+  const from = document.getElementById('fromCur').value;
+  const to = document.getElementById('toCur').value;
+  const amount = document.getElementById('amount').value || '1';
+  const r = await fetch(`/convert_currency?from=${from}&to=${to}&amount=${amount}`);
+  const data = await r.json();
+  if(data.error) document.getElementById('result').textContent = '오류: '+data.error;
+  else document.getElementById('result').textContent = `결과: ${data.result} (환율: ${data.rate})`;
+});
+</script>
 {% endblock %}

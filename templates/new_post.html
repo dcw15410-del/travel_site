@@ -1,20 +1,15 @@
-<!-- templates/new_post.html -->
 {% extends "base.html" %}
 {% block title %}새 글 작성{% endblock %}
 {% block content %}
-  <h2>새 글 작성</h2>
-  <form method="post" enctype="multipart/form-data">
-    <div>
-      <label>제목<br><input name="title" required style="width:100%"></label>
-    </div>
-    <div>
-      <label>이미지 (선택)<br><input type="file" name="image" accept="image/*"></label>
-    </div>
-    <div>
-      <label>내용<br><textarea name="content" rows="8" style="width:100%" required></textarea></label>
-    </div>
-    <div style="margin-top:8px;">
-      <button class="btn" type="submit">등록</button>
-    </div>
-  </form>
+<div style="max-width:800px;margin:0 auto;">
+  <div class="card">
+    <h3>새 글 작성</h3>
+    <form method="post" enctype="multipart/form-data">
+      <div><label>제목</label><br><input name="title" required style="width:100%;"></div>
+      <div><label>이미지 (선택)</label><br><input type="file" name="image"></div>
+      <div><label>내용</label><br><textarea name="content" rows="10" style="width:100%;" required></textarea></div>
+      <div style="margin-top:8px;"><button type="submit">등록</button></div>
+    </form>
+  </div>
+</div>
 {% endblock %}

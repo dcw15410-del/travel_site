@@ -1,9 +1,20 @@
 {% extends "base.html" %}
+{% block title %}게시판{% endblock %}
 {% block content %}
-<h3>글쓰기</h3>
-<form method="POST">
-    <input class="form-control mb-2" name="title" placeholder="제목">
-    <textarea class="form-control mb-2" name="content" rows="5" placeholder="내용"></textarea>
-    <button class="btn btn-primary w-100">등록</button>
-</form>
+<div style="display:flex;gap:16px;">
+  <div style="flex:1;">
+    <div class="card">
+      <h3>게시판</h3>
+      <p><a href="{{ url_for('new_post') }}">새 글 작성</a></p>
+      {% for p in posts %}
+        <div style="padding:8px 0;border-bottom:1px solid #eee;">
+          <a href="{{ url_for('post_detail', post_id=p.id) }}"><strong>{{ p.title }}</strong></a>
+          <div style="font-size:13px;color:#666;">작성자: {{ p.user_id }} / {{ p.created_at }}</div>
+        </div>
+      {% else %}
+        <div>글이 없습니다.</div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
 {% endblock %}

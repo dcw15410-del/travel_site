@@ -1,27 +1,59 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8">
-  <title>여행 커뮤니티</title>
-  <link rel="stylesheet" href="https://cdn.simplecss.org/simple.min.css">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>{% block title %}Travel Site{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <style>
+    /* 간단한 기본 CSS (원하면 static/style.css 로 분리) */
+    body { font-family: Arial, sans-serif; margin:0; padding:0; background:#f6f8fa; }
+    header { background:#fff; padding:12px; display:flex; gap:12px; align-items:center; box-shadow:0 1px 4px rgba(0,0,0,0.06);}
+    main { padding:16px; max-width:1100px; margin:16px auto; }
+    .container { display:flex; gap:16px; }
+    nav a { margin-right:12px; text-decoration:none; color:#007bff; }
+    .card { background:white; padding:12px; border-radius:8px; box-shadow:0 1px 4px rgba(0,0,0,0.04); }
+    footer { text-align:center; padding:12px; color:#666; }
+  </style>
+  {% block head %}{% endblock %}
 </head>
 <body>
-<header>
-  <h2><a href="{{ url_for('index') }}">🏝 여행 커뮤니티</a></h2>
-  <nav>
-    {% if 'username' in session %}
-      <a href="{{ url_for('chat_rooms') }}">채팅방</a>
-      <a href="{{ url_for('currency') }}">환율</a>
+  <header>
+    <a href="{{ url_for('index') }}"><strong>TravelSite</strong></a>
+    <nav>
+      <a href="{{ url_for('index') }}">홈</a>
+      <a href="{{ url_for('posts') }}">게시판</a>
+      <a href="{{ url_for('chat_rooms') }}">채팅</a>
       <a href="{{ url_for('map_view') }}">지도</a>
-      <a href="{{ url_for('logout') }}">로그아웃 ({{ session['username'] }})</a>
-    {% else %}
-      <a href="{{ url_for('login') }}">로그인</a>
-      <a href="{{ url_for('register') }}">회원가입</a>
-    {% endif %}
-  </nav>
-</header>
-<main>
-  {% block content %}{% endblock %}
-</main>
+      <a href="{{ url_for('currency_page') }}">환율</a>
+    </nav>
+    <div style="margin-left:auto;">
+      {% if current_user %}
+        <span>{{ current_user.nickname }}님</span>
+        <a href="{{ url_for('logout') }}">로그아웃</a>
+      {% else %}
+        <a href="{{ url_for('login') }}">로그인</a> |
+        <a href="{{ url_for('register') }}">회원가입</a>
+      {% endif %}
+    </div>
+  </header>
+
+  <main>
+    {% with messages = get_flashed_messages() %}
+      {% if messages %}
+        <div class="card" style="margin-bottom:12px;">
+          {% for m in messages %}<div>{{ m }}</div>{% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer>
+    &copy; {{ datetime.utcnow().year }} TravelSite
+  </footer>
+
+  {% block scripts %}{% endblock %}
 </body>
 </html>

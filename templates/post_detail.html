@@ -1,14 +1,18 @@
-<!-- templates/post_detail.html -->
 {% extends "base.html" %}
 {% block title %}{{ post.title }}{% endblock %}
 {% block content %}
+<div class="card" style="max-width:900px;margin:0 auto;">
   <h2>{{ post.title }}</h2>
-  <p><small>작성일: {{ post.created_at.strftime("%Y-%m-%d %H:%M") }}</small></p>
+  <div style="color:#666">작성자: {{ author.nickname if author else '알수없음' }} | {{ post.created_at }}</div>
   {% if post.image %}
-    <p><img src="{{ url_for('uploaded_file', filename=post.image) }}" style="max-width:400px;"></p>
+    <div><img src="{{ url_for('uploaded_file', filename=post.image) }}" alt="image" style="max-width:100%;height:auto;margin-top:8px;"></div>
   {% endif %}
-  <div>{{ post.content|nl2br }}</div>
-  <form method="post" action="{{ url_for('delete_post', post_id=post.id) }}" onsubmit="return confirm('삭제하시겠습니까?')">
-    <button class="btn" type="submit">삭제</button>
-  </form>
+  <div style="margin-top:12px;">{{ post.content | nl2br }}</div>
+
+  {% if current_user and current_user.id == post.user_id %}
+    <form method="post" action="{{ url_for('delete_post', post_id=post.id) }}" style="margin-top:12px;">
+      <button type="submit" onclick="return confirm('삭제하시겠습니까?')">삭제</button>
+    </form>
+  {% endif %}
+</div>
 {% endblock %}
