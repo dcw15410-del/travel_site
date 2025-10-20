@@ -83,9 +83,8 @@ TIMEZONE_MAP = {
     "태국": "Asia/Bangkok"
 }
 
-# 접속 관리용 (실시간 사용자 추적)
-room_members = {room: set() for room in CHAT_ROOMS}  # room -> set(sid)
-sid_map = {}  # sid -> {"nick": nickname, "room": room}
+room_members = {room: set() for room in CHAT_ROOMS}
+sid_map = {}
 
 def build_room_state_payload():
     counts = {room: len(room_members.get(room, set())) for room in CHAT_ROOMS}
@@ -131,6 +130,11 @@ def inject_user_and_subscription_and_times():
         timezone_map=TIMEZONE_MAP
     )
 
+# ✅ base.html용 datetime 전달 (오류 원인 해결)
+@app.context_processor
+def inject_datetime():
+    return {'datetime': datetime}
+
 # -----------------------------
 # 유틸
 # -----------------------------
@@ -138,7 +142,7 @@ def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 # -----------------------------
-# 라우트: 게시판 / 회원 / 구독 / 지도 / 환율 / 업로드 등
+# 라우트
 # -----------------------------
 @app.route('/')
 def index():
@@ -287,7 +291,6 @@ def chat(room):
         flash("존재하지 않는 채팅방입니다.")
         return redirect(url_for('chat_rooms'))
     user = User.query.get(session['user_id'])
-    # 과거 메시지는 최근 100개 불러오기 (있으면)
     messages = Message.query.filter_by(room=room).order_by(Message.created_at.asc()).limit(500).all()
     return render_template('chat.html', messages=messages, user=user, room=room)
 
@@ -325,7 +328,6 @@ def convert_currency_api():
             rate = round(data.get("info", {}).get("rate", 0), 6)
             return jsonify({"result": result, "rate": rate})
 
-        # 백업
         backup_url = f"https://open.er-api.com/v6/latest/{from_cur}"
         with urllib.request.urlopen(backup_url, timeout=8) as r2:
             data2 = json.loads(r2.read().decode())
@@ -346,7 +348,6 @@ def currency_page():
     }
     return render_template("currency.html", currencies=currencies)
 
-# 업로드 서빙
 @app.route('/uploads/<filename>')
 def uploaded_file(filename):
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
@@ -444,7 +445,6 @@ with app.app_context():
 # -----------------------------
 if __name__ == '__main__':
     debug_mode = os.environ.get('FLASK_DEBUG', '0') == '1'
-    # eventlet이 설치되어 있어야 합니다.
     import eventlet
     eventlet.monkey_patch()
     socketio.run(app, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=debug_mode)
