@@ -444,7 +444,8 @@ with app.app_context():
 # 앱 실행
 # -----------------------------
 if __name__ == '__main__':
-    debug_mode = os.environ.get('FLASK_DEBUG', '0') == '1'
-    import eventlet
-    eventlet.monkey_patch()
-    socketio.run(app, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=debug_mode)
+    import os
+    port = int(os.environ.get("PORT", 10000))
+    # eventlet 사용 ❌ 대신 threading 모드로 실행 ✅
+    socketio.run(app, host='0.0.0.0', port=port, debug=False)
+

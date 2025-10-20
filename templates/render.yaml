@@ -3,5 +3,5 @@ services:
     name: travel_site
     env: python
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn -k eventlet -w 1 app:app
+    startCommand: gunicorn -k gevent -w 1 app:app
     pythonVersion: 3.11.9
