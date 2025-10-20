@@ -36,8 +36,8 @@ ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
 
 db = SQLAlchemy(app)
 
-# SocketIO (eventlet 사용)
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
+# SocketIO (gevent 기반)
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode="gevent")
 
 # -----------------------------
 # DB 모델
@@ -130,7 +130,6 @@ def inject_user_and_subscription_and_times():
         timezone_map=TIMEZONE_MAP
     )
 
-# ✅ base.html용 datetime 전달 (오류 원인 해결)
 @app.context_processor
 def inject_datetime():
     return {'datetime': datetime}
@@ -441,11 +440,8 @@ with app.app_context():
     logger.info(f"DB ensured at {db_path}")
 
 # -----------------------------
-# 앱 실행
+# 앱 실행 (gevent 호환)
 # -----------------------------
 if __name__ == '__main__':
-    import os
     port = int(os.environ.get("PORT", 10000))
-    # eventlet 사용 ❌ 대신 threading 모드로 실행 ✅
     socketio.run(app, host='0.0.0.0', port=port, debug=False)
-
