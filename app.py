@@ -454,16 +454,18 @@ def send_room_data():
     socketio.emit('room_users_update', build_room_state_payload())
 
 # -----------------------------
-# 앱 실행
+# 앱 실행 (Render 서버 포함)
 # -----------------------------
 if __name__ == "__main__":
     import eventlet
     eventlet.monkey_patch()
 
-    # ✅ 앱 실행 전에 데이터베이스 자동 생성
+    # ✅ 서버 시작 전에 데이터베이스 테이블 자동 생성
+    from app import db, app  # 혹시 동일 파일 내일 경우 불필요하지만 안전하게
     with app.app_context():
         db.create_all()
 
-    # ✅ eventlet을 이용한 SocketIO 실행
+    # ✅ eventlet로 Flask-SocketIO 실행
     socketio.run(app, host="0.0.0.0", port=10000)
+
 
