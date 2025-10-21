@@ -1,18 +1,15 @@
 {% extends "base.html" %}
-{% block title %}채팅 방 목록{% endblock %}
 {% block content %}
-<div class="card" style="max-width:900px;margin:0 auto;">
-  <h3>채팅방 목록</h3>
-  <ul>
-    {% for r in chat_rooms %}
-      <li>
-        <a href="{{ url_for('chat', room=r) }}">{{ r }}</a>
-        - 접속자: {{ room_users[r] }}명 - 현지시간: {{ room_times[r] }}
-        <div style="font-size:13px;color:#666;">
-          접속자: {{ room_user_list[r] | join(', ') if room_user_list[r] else '없음' }}
+<h2>채팅방 목록</h2>
+<div class="room-list">
+    {% for room in chat_rooms %}
+    <div class="room-item">
+        <a href="{{ url_for('chat', room=room) }}">{{ room }}</a>
+        <div>
+            접속자: <b id="count-{{room}}">{{ room_users[room] }}</b>명 /
+            시각: <span id="time-{{room}}">{{ room_times[room] }}</span>
         </div>
-      </li>
+    </div>
     {% endfor %}
-  </ul>
 </div>
 {% endblock %}

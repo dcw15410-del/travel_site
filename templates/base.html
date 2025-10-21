@@ -1,59 +1,55 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>{% block title %}Travel Site{% endblock %}</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-  <style>
-    /* 간단한 기본 CSS (원하면 static/style.css 로 분리) */
-    body { font-family: Arial, sans-serif; margin:0; padding:0; background:#f6f8fa; }
-    header { background:#fff; padding:12px; display:flex; gap:12px; align-items:center; box-shadow:0 1px 4px rgba(0,0,0,0.06);}
-    main { padding:16px; max-width:1100px; margin:16px auto; }
-    .container { display:flex; gap:16px; }
-    nav a { margin-right:12px; text-decoration:none; color:#007bff; }
-    .card { background:white; padding:12px; border-radius:8px; box-shadow:0 1px 4px rgba(0,0,0,0.04); }
-    footer { text-align:center; padding:12px; color:#666; }
-  </style>
-  {% block head %}{% endblock %}
+    <meta charset="UTF-8">
+    <title>{{ title if title else "여행 커뮤니티" }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
 </head>
 <body>
-  <header>
-    <a href="{{ url_for('index') }}"><strong>TravelSite</strong></a>
+<header>
+    <h1><a href="{{ url_for('index') }}">여행 커뮤니티</a></h1>
     <nav>
-      <a href="{{ url_for('index') }}">홈</a>
-      <a href="{{ url_for('posts') }}">게시판</a>
-      <a href="{{ url_for('chat_rooms') }}">채팅</a>
-      <a href="{{ url_for('map_view') }}">지도</a>
-      <a href="{{ url_for('currency_page') }}">환율</a>
+        <a href="{{ url_for('index') }}">홈</a>
+        <a href="{{ url_for('chat_rooms') }}">채팅</a>
+        {% if current_user %}
+            <span>{{ current_user.nickname }}님</span>
+            <a href="{{ url_for('logout') }}">로그아웃</a>
+        {% else %}
+            <a href="{{ url_for('login') }}">로그인</a>
+            <a href="{{ url_for('register') }}">회원가입</a>
+        {% endif %}
     </nav>
-    <div style="margin-left:auto;">
-      {% if current_user %}
-        <span>{{ current_user.nickname }}님</span>
-        <a href="{{ url_for('logout') }}">로그아웃</a>
-      {% else %}
-        <a href="{{ url_for('login') }}">로그인</a> |
-        <a href="{{ url_for('register') }}">회원가입</a>
-      {% endif %}
-    </div>
-  </header>
+</header>
 
-  <main>
-    {% with messages = get_flashed_messages() %}
-      {% if messages %}
-        <div class="card" style="margin-bottom:12px;">
-          {% for m in messages %}<div>{{ m }}</div>{% endfor %}
-        </div>
-      {% endif %}
-    {% endwith %}
-
+<main>
     {% block content %}{% endblock %}
-  </main>
+</main>
 
-  <footer>
-    &copy; {{ datetime.utcnow().year }} TravelSite
-  </footer>
+<footer>
+    <div id="live-time">
+        {% for room, time in room_times.items() %}
+            <span>{{ room }}: <b id="time-{{room}}">{{ time }}</b></span>
+        {% endfor %}
+    </div>
+</footer>
 
-  {% block scripts %}{% endblock %}
+<script>
+const socket = io();
+
+socket.on("time_update", data => {
+    for (const [room, t] of Object.entries(data)) {
+        const el = document.getElementById("time-" + room);
+        if (el) el.textContent = t;
+    }
+});
+
+socket.on("room_users_update", data => {
+    for (const [room, count] of Object.entries(data.counts)) {
+        const el = document.getElementById("count-" + room);
+        if (el) el.textContent = count;
+    }
+});
+</script>
 </body>
 </html>

@@ -36,8 +36,8 @@ ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
 
 db = SQLAlchemy(app)
 
-# SocketIO (gevent 기반)
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode="gevent")
+# SocketIO (eventlet 기반으로 변경)
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
 
 # -----------------------------
 # DB 모델
@@ -431,17 +431,31 @@ def handle_send_message(data):
         logger.exception("메시지 DB 저장 실패")
 
     emit('receive_message', {'user': nickname, 'msg': text, 'time': ts.strftime("%H:%M:%S")}, room=room)
+    socketio.emit('room_users_update', build_room_state_payload())
 
 # -----------------------------
-# DB 생성
+# 추가: 실시간 시각 및 접속자 요청 이벤트
 # -----------------------------
-with app.app_context():
-    db.create_all()
-    logger.info(f"DB ensured at {db_path}")
+@socketio.on('request_time_update')
+def send_time_update():
+    """클라이언트가 요청 시 실시간 타임존별 시각 전송"""
+    now_times = {}
+    for room, tzname in TIMEZONE_MAP.items():
+        tz = pytz.timezone(tzname)
+        now_times[room] = datetime.now
+        now_times[room] = datetime.now(tz).strftime("%H:%M:%S")
+    socketio.emit('time_update', now_times)
+
+@socketio.on('request_room_data')
+def send_room_data():
+    """클라이언트가 요청 시 채팅방별 접속자 수와 목록 전송"""
+    socketio.emit('room_users_update', build_room_state_payload())
 
 # -----------------------------
-# 앱 실행 (gevent 호환)
+# 앱 실행
 # -----------------------------
-if __name__ == '__main__':
-    port = int(os.environ.get("PORT", 10000))
-    socketio.run(app, host='0.0.0.0', port=port, debug=False)
+if __name__ == "__main__":
+    with app.app_context():
+        db.create_all()
+    logger.info("✅ Flask + SocketIO 서버 시작 중...")
+    socketio.run(app, host="0.0.0.0", port=5000, debug=True)
