@@ -457,7 +457,13 @@ def send_room_data():
 # 앱 실행
 # -----------------------------
 if __name__ == "__main__":
+    import eventlet
+    eventlet.monkey_patch()
+
+    # ✅ 앱 실행 전에 데이터베이스 자동 생성
     with app.app_context():
         db.create_all()
-    logger.info("✅ Flask + SocketIO 서버 시작 중...")
-    socketio.run(app, host="0.0.0.0", port=5000, debug=True)
+
+    # ✅ eventlet을 이용한 SocketIO 실행
+    socketio.run(app, host="0.0.0.0", port=10000)
+
